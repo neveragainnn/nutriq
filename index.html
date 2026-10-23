@@ -54,6 +54,10 @@ p{margin:0 0 8px}
 .cta-mark svg{width:30px;height:30px;fill:none;stroke:var(--ink);stroke-width:1.8;stroke-linecap:round}
 .sec-head{margin-top:24px}
 .sec-head h2{font:800 20px/1.2 var(--display)}
+.pnote{position:relative;background:var(--berry-soft);border-radius:16px;padding:16px 16px 14px 50px;margin:0 0 12px}
+.pnote p{margin:0;font-size:16px;line-height:1.45;color:var(--ink)}
+.pnote small{display:block;margin-top:6px;color:var(--berry);font-weight:600}
+.pnote-mark{position:absolute;left:16px;top:14px;font-size:22px;color:var(--berry)}
 .invite{border-color:var(--sage);background:var(--sage-soft)}
 
 .kcal{display:flex;align-items:baseline;gap:8px}
@@ -150,6 +154,13 @@ details summary{cursor:pointer;color:var(--sage);font-weight:600;font-size:14px;
 .label section{border-top:1px solid var(--ink);padding-top:2px;margin-top:12px}
 .label section h3{margin-top:10px}
 .src{font-size:13px;color:var(--muted);margin:0}
+.summary{padding:12px;border-radius:8px;background:var(--unk-soft)}
+.summary b{display:block;font-size:16px;margin-bottom:4px}
+.summary p{margin:4px 0 0;font-size:14px}
+.summary span{font-weight:600}
+.summary.good{background:var(--good-soft)}.summary.good b{color:var(--good)}
+.summary.amber{background:var(--amber-soft)}.summary.amber b{color:var(--amber)}
+.summary.berry{background:var(--berry-soft)}.summary.berry b{color:var(--berry)}
 .verdict{font-weight:600;padding:10px 12px;border-radius:8px;background:var(--unk-soft)}
 .verdict.good{background:var(--good-soft);color:var(--good)}
 .verdict.amber{background:var(--amber-soft);color:var(--amber)}
@@ -406,7 +417,7 @@ function analyze(p, profile, now) {
     const tags = [];
     if (!NO_SUGAR_PHRASE.test(it)) {
       for (const [re, label] of SUGAR_RULES) {
-        if (re.test(it)) { added.push({ name: label, pos: i }); tags.push(['добавленный сахар', 'berry']); break; }
+        if (re.test(it)) { const nested = !re.test(it.split('(')[0]); added.push({ name: label, pos: nested ? i + 3 : i }); tags.push(['добавленный сахар', 'berry']); break; }
       }
     }
     if (SWEET_RE.test(it)) { sweet.push(it); tags.push(['подсластитель', 'plain']); }
@@ -463,79 +474,56 @@ function analyze(p, profile, now) {
 
   /* --- Кожа --- */
   const sf = [];
-  const topSugar = added.some(a => a.pos <= 2);
+  const topSugar = added.some(a => a.pos <= 2) && !(n.sugars != null && n.sugars <= th.sugars[0]);
   if (added.length) {
     const names = [...new Set(added.map(a => a.name))].join(', ');
-    sf.push({ tone: topSugar ? 'strong' : 'watch',
-      title: topSugar ? 'Сахар среди первых ингредиентов' : 'В составе есть добавленный сахар',
-      text: `Найдено: ${names}. ${topSugar ? 'Ингредиенты перечисляют по убыванию доли, так что сахара здесь много.' : 'Он не в начале списка, поэтому его доля, скорее всего, небольшая.'} Точное количество добавленного сахара на российских этикетках обычно не указывают, поэтому мы его не вычисляем.` });
+    sf.push(topSugar
+      ? { tone: 'strong', title: 'Много сахара', text: `Сахар в начале состава (${names}) — значит, его много. Сладкое усиливает прыщи.` }
+      : { tone: 'watch', title: 'Есть добавленный сахар', text: `${names[0].toUpperCase() + names.slice(1)} — не в начале состава, его немного.` });
   } else if (hasIng) {
-    sf.push({ tone: 'good', title: 'Добавленного сахара в составе нет',
-      text: 'Проверили сахар, сиропы, патоку, декстрозу, мальтодекстрин, мёд и концентрированные соки.' });
+    sf.push({ tone: 'good', title: 'Без добавленного сахара', text: 'Хорошо для кожи.' });
   }
   if (n.sugars != null) {
     if (drink && n.sugars > th.sugars[0] && (added.length || !hasIng)) {
-      sf.push({ tone: 'strong', title: 'Сладкий напиток',
-        text: `${fmt1(n.sugars)} г сахаров на 100 мл. Сладкие напитки — одна из категорий, для которых связь с акне в исследованиях находили чаще всего.` });
+      sf.push({ tone: 'strong', title: 'Сладкий напиток', text: `${fmt1(n.sugars)} г сахара в 100 мл. Сладкие напитки сильнее всего связаны с прыщами. Пейте редко.` });
     } else if (n.sugars > th.sugars[1]) {
-      sf.push({ tone: 'strong', title: 'Много сахаров',
-        text: `${fmt1(n.sugars)} г на ${unit}. Это высокий уровень по шкале UK FSA.${!added.length && hasIng ? ' Добавленного сахара в составе нет, так что это, вероятно, сахара из фруктов, сухофруктов или молока.' : ''}` });
+      sf.push({ tone: 'strong', title: `Сахара очень много: ${fmt1(n.sugars)} г на ${unit}`, text: !added.length && hasIng ? 'Сахар из фруктов или молока, но его всё равно много. Ешьте маленькую порцию.' : 'Ешьте маленькую порцию и не каждый день.' });
     } else if (n.sugars > th.sugars[0] && !added.length && hasIng) {
-      sf.push({ tone: 'info', title: 'Сахара, скорее всего, естественные',
-        text: `${fmt1(n.sugars)} г на ${unit}, но добавленного сахара в составе нет. ${dairy ? 'В молочных продуктах это в основном лактоза.' : 'Обычно это сахара фруктов или молока.'} Общие сахара и добавленный сахар — не одно и то же.` });
+      sf.push({ tone: 'info', title: 'Сахар естественный', text: `${fmt1(n.sugars)} г на ${unit} — ${dairy ? 'это сахар молока' : 'это сахар фруктов или молока'}, его не добавляли. Нормально.` });
     } else if (n.sugars <= th.sugars[0]) {
-      sf.push({ tone: 'good', title: 'Мало сахаров', text: `${fmt1(n.sugars)} г на ${unit}.` });
+      sf.push({ tone: 'good', title: 'Мало сахара', text: `${fmt1(n.sugars)} г на ${unit}.` });
     }
   }
   const gl = n.carbs != null && n.carbs >= 50 && (n.fiber == null || n.fiber < FIBER_SOURCE) && (refinedTop || topSugar);
   if (gl) {
-    sf.push({ tone: 'watch', title: 'Быстрые углеводы и мало клетчатки',
-      text: 'Похоже на продукт с высокой гликемической нагрузкой — этот фактор в исследованиях связывают с акне. Точный гликемический индекс по этикетке определить нельзя: многое зависит от порции и того, с чем вы его едите.' });
+    sf.push({ tone: 'watch', title: 'Быстрые углеводы', text: 'Белая мука или сахар и почти нет клетчатки. Резко поднимают сахар в крови — это связывают с прыщами. Ешьте вместе с белком и овощами.' });
   }
   if (whole || (n.fiber != null && n.fiber >= FIBER_HIGH)) {
-    sf.push({ tone: 'good', title: whole ? 'Есть цельное зерно или клетчатка' : 'Много клетчатки',
-      text: 'Клетчатка замедляет усвоение углеводов и снижает гликемическую нагрузку приёма пищи.' });
+    sf.push({ tone: 'good', title: 'Есть клетчатка', text: 'Замедляет усвоение углеводов. Хорошо для кожи.' });
   }
   if (whey) {
-    sf.push({ tone: 'watch', title: 'Сывороточный белок',
-      text: 'Сыворотка заметно повышает инсулин. Описаны случаи акне у людей, принимающих сывороточный протеин. Если замечаете связь, попробуйте говяжий, яичный или растительный протеин и понаблюдайте за кожей несколько недель.' });
+    sf.push({ tone: 'watch', title: 'Сывороточный протеин', text: 'У части людей усиливает прыщи. Если кожа стала хуже после начала приёма — замените на говяжий, яичный или растительный на 4–6 недель.' });
   } else if (dairy) {
-    sf.push({ tone: profile.dairyWatch ? 'watch' : 'info', title: 'Молочный продукт',
-      text: 'Связь с акне чаще описывали для молока, особенно обезжиренного. По йогуртам и сырам данные слабее и противоречивее. Это повод понаблюдать за собой в дневнике кожи, а не повод исключать молочное.' });
+    sf.push({ tone: profile.dairyWatch ? 'watch' : 'info', title: 'Молочное', text: 'Молоко у части людей усиливает прыщи. Кефир, йогурт и сыр влияют слабее. Отмечайте кожу в дневнике.' });
   }
-  if (choc) {
-    sf.push({ tone: 'info', title: 'Шоколад или какао',
-      text: 'Данные о связи шоколада с акне слабые и противоречивые. Чаще всего дело не в какао, а в сахаре и молоке, которые идут вместе с ним. Тёмный шоколад с высоким процентом какао — более мягкий вариант.' });
-  }
-  if (iodine) {
-    sf.push({ tone: 'watch', title: 'Водоросли — много йода',
-      text: 'Избыток йода описан как возможный провокатор акнеподобных высыпаний, чаще при приёме добавок с водорослями. В обычной порции салата из морской капусты это вряд ли проблема, но в БАДах и смузи с водорослями дозы бывают большими.' });
-  }
-  if (b12) {
-    sf.push({ tone: 'info', title: 'Добавлен витамин B12',
-      text: 'Высокие дозы B12 (обычно уколы и мегадозы в добавках) описаны как возможная причина акнеподобных высыпаний. В обычных продуктах с витаминами доза небольшая.' });
-  }
-  if (omega3) {
-    sf.push({ tone: 'good', title: 'Источник омега-3',
-      text: 'Жирная рыба, лён, чиа и грецкие орехи дают омега-3. Небольшие исследования показывают, что омега-3 может уменьшать воспалительные высыпания.' });
-  }
-  if (sweet.length) {
-    sf.push({ tone: 'info', title: 'Подсластители',
-      text: 'Они не добавляют сахар. Надёжных данных о связи подсластителей с акне нет. Полиолы (сорбит, мальтит, эритрит) в больших количествах могут вызывать дискомфорт в животе.' });
-  }
+  if (choc) sf.push({ tone: 'info', title: 'Шоколад или какао', text: 'Связь с прыщами слабая. Чаще виноваты сахар и молоко в шоколаде.' });
+  if (iodine) sf.push({ tone: 'watch', title: 'Водоросли — много йода', text: 'Много йода может вызывать высыпания. Салат — нормально, БАДы с водорослями — осторожно.' });
+  if (b12) sf.push({ tone: 'info', title: 'Витамин B12', text: 'Большие дозы B12 могут вызывать высыпания. В еде доза обычно маленькая.' });
+  if (omega3) sf.push({ tone: 'good', title: 'Омега-3', text: 'Может уменьшать воспаления. Хорошо для кожи.' });
+  if (sweet.length) sf.push({ tone: 'info', title: 'Подсластители', text: 'Сахара нет. Связи с прыщами не найдено. Много — может вздуть живот.' });
   let skinLevel;
   if (!hasIng && n.sugars == null) skinLevel = 'unknown';
   else if (sf.some(f => f.tone === 'strong')) skinLevel = 'strong';
   else if (sf.some(f => f.tone === 'watch')) skinLevel = 'watch';
   else skinLevel = 'low';
-  const SKIN_LABEL = { strong: 'Есть выраженные факторы', watch: 'Есть факторы для наблюдения', low: 'Заметных факторов не найдено', unknown: 'Недостаточно данных' };
+  const SKIN_LABEL = { strong: 'Может усилить прыщи', watch: 'Осторожно', low: 'Нормально', unknown: 'Мало данных' };
 
   /* --- Состав: заметки --- */
   const notes = [];
-  if (zmzh) notes.push({ tone: 'amber', text: 'Заменитель молочного жира (ЗМЖ): часть молочного жира заменена растительными жирами. Это не опасно, но такой продукт — не полностью молочный.' });
-  if (hydro) notes.push({ tone: 'amber', text: 'Гидрогенизированный жир или маргарин: может содержать трансжиры, их стоит ограничивать.' });
-  if (palm) notes.push({ tone: 'plain', text: 'Пальмовое масло: богато насыщенными жирами. Оценивайте его вместе с общим количеством насыщенных жиров.' });
-  if (ecodes.size) notes.push({ tone: 'plain', text: `Пищевые добавки: ${[...ecodes].join(', ')}. Само наличие Е-кодов не делает продукт вредным: у каждой добавки своя функция и разрешённая доза.` });
+  if (zmzh) notes.push({ tone: 'amber', text: 'ЗМЖ: молочный жир частично заменён растительным. Это уже не настоящая молочка.' });
+  if (hydro) notes.push({ tone: 'amber', text: 'Маргарин или гидрогенизированный жир: могут быть трансжиры. Ешьте редко.' });
+  if (palm) notes.push({ tone: 'plain', text: 'Пальмовое масло: много насыщенных жиров.' });
+  if (ecodes.size) notes.push({ tone: 'plain', text: `Добавки: ${[...ecodes].join(', ')}. Е-коды разрешены и сами по себе не вредны.` });
 
   /* --- Под цель --- */
   const fit = [];
@@ -572,6 +560,96 @@ function analyze(p, profile, now) {
   };
 }
 
+
+/* Признаки сильной обработки — группы, а не отдельные Е-коды */
+const UPF_GROUPS = [
+  ['ароматизаторы', /ароматизатор/],
+  ['усилители вкуса', /усилител[а-я]*\s+вкус|глутамат|инозинат|гуанилат|(^|[^а-я])е\s?-?62[1-9]|(^|[^а-я])е\s?-?63\d/],
+  ['модифицированный крахмал', /модифицированн[а-я]*\s+крахмал|(^|[^а-я])е\s?-?14[0-5]\d/],
+  ['сиропы и мальтодекстрин', /мальтодекстрин|глюкозн[а-я]*[-\s]+(фруктозн[а-я]*\s+)?сироп|инвертн[а-я]*\s+сироп/],
+  ['красители', /краситель|(^|[^а-я])е\s?-?1[0-6]\d/],
+  ['эмульгаторы и загустители', /эмульгатор|загустител|стабилизатор/],
+  ['подсластители', /подсластител|сукралоз|аспартам|ацесульфам|цикламат|сахарин/],
+  ['заменители жира', /гидрогенизир|маргарин|заменител[а-я]*\s+молочного\s+жира|змж/]
+];
+const PROC_MEAT_RE = /нитрит\s+натрия|(^|[^а-я])е\s?-?25[0-2]|колбас|сосис|сардел|ветчин|бекон|салями|сервелат|пепперони|буженин|карбонад\s+копч/;
+
+function healthSummary(p, a, t) {
+  const n = p.n || {};
+  const text = normText(p.ingredients) + ' ' + normText(p.name);
+  const hasIng = a.comp.items.length > 0;
+  const row = k => a.rows.find(r => r.key === k) || {};
+  const high = k => row(k).label === 'Высокое' && row(k).hint !== 'ожидаемо для категории';
+  const issues = [], goods = [];
+  const groups = hasIng ? UPF_GROUPS.filter(([, re]) => re.test(normText(p.ingredients))).map(([g]) => g) : [];
+  const procMeat = (p.category === 'meat' || p.category === 'ready' || /пицц|бургер|хот-?дог|сэндвич/.test(text)) && PROC_MEAT_RE.test(text);
+  const protPct = n.kcal ? (n.protein || 0) * 4 / n.kcal * 100 : null;
+  if (high('salt')) issues.push(['salt', 'много соли']);
+  if (high('satfat')) issues.push(['satfat', 'много насыщенных жиров']);
+  else if (high('fat')) issues.push(['fat', 'очень жирный']);
+  if (high('sugars') || a.flags.topSugar) issues.push(['sugar', 'много сахара']);
+  const sweetDrink = p.category === 'drink' && a.flags.addedSugar && n.sugars != null && n.sugars > 5;
+  if (sweetDrink) issues.push(['drink', 'сладкий напиток — сахар без сытости']);
+  if (procMeat) issues.push(['meat', 'колбаса или сосиски — их лучше есть редко']);
+  if (groups.length >= 3) issues.push(['upf', `много добавок (${groups.slice(0, 3).join(', ')})`]);
+  if (n.kcal >= 350 && protPct != null && protPct < 10 && p.category !== 'fatnut') issues.push(['lowprot', 'калорийно, а белка мало — скоро снова захотите есть']);
+  if (['grain', 'breakfast', 'ready', 'sweets'].includes(p.category) && n.fiber != null && n.fiber < 3 && a.flags.gl) issues.push(['fiber', 'быстрые углеводы без клетчатки']);
+  if (protPct != null && protPct >= 20 && n.protein >= 5) goods.push('много белка');
+  else if (protPct != null && protPct >= 12 && n.protein >= 3) goods.push('есть белок');
+  if (n.fiber != null && n.fiber >= 3) goods.push('есть клетчатка');
+  if (hasIng && !a.flags.addedSugar && n.sugars != null && n.sugars <= 5) goods.push('мало сахара');
+  if (n.salt != null && n.salt <= 0.3 && p.category !== 'drink') goods.push('мало соли');
+  if (hasIng && a.comp.items.length <= 5 && !groups.length && !a.comp.ecodes.length) goods.push('короткий понятный состав');
+  if (a.flags.omega3) goods.push('есть омега-3');
+  const TIPS = {
+    salt: 'Берите, где соли меньше 1,5 г на 100 г.',
+    satfat: 'Берите, где насыщенных жиров меньше 5 г на 100 г.',
+    fat: 'Ешьте маленькую порцию.',
+    sugar: 'Берите без сахара. Ягоды или фрукты добавьте сами.',
+    meat: 'Замените на курицу, рыбу или яйца.',
+    upf: 'Берите похожий продукт с коротким составом.',
+    lowprot: 'Добавьте белок: творог, яйца, курицу.',
+    fiber: 'Берите цельнозерновое или добавьте овощи.',
+    drink: 'Пейте воду или напиток без сахара.'
+  };
+  const nutKnown = ['kcal', 'protein', 'fat', 'salt', 'sugars'].filter(k => n[k] != null).length;
+  let head;
+  if (!hasIng && nutKnown < 3) head = { tone: 'unk', short: 'Мало данных', text: 'Мало данных. Сфотографируйте состав.' };
+  else if (issues.length >= 3) head = { tone: 'berry', short: 'Редко', text: 'Ешьте редко. Это не еда на каждый день.' };
+  else if (issues.length === 2) head = { tone: 'amber', short: '2–3 раза в неделю', text: 'Не чаще 2–3 раз в неделю.' };
+  else if (issues.length === 1) head = { tone: 'amber', short: 'Следите за порцией', text: 'Можно, но следите за порцией.' };
+  else if (goods.length >= 2) head = { tone: 'good', short: 'Хороший выбор', text: 'Хороший выбор. Можно каждый день.' };
+  else head = { tone: 'plain', short: 'Нормально', text: 'Нормально. Можно каждый день.' };
+  /* Сколько за раз: одна порция — не больше трети дневного лимита (ВОЗ: соль 5 г; насыщ. жиры и добавл. сахар — до 10% калорий) */
+  const kcalDay = t && t.kcal ? t.kcal : 2000;
+  const budgets = [
+    ['salt', 5, 'соли'],
+    ['satfat', kcalDay * 0.10 / 9, 'насыщенных жиров'],
+    ['kcal', kcalDay, 'калорий']
+  ];
+  if (a.flags.topSugar || (a.flags.addedSugar && ['sweets', 'drink', 'breakfast'].includes(p.category))) budgets.push(['sugars', kcalDay * 0.10 / 4, 'сахара']);
+  let dose = null;
+  if (head.tone !== 'unk') {
+    let best = null;
+    for (const [k, day, label] of budgets) {
+      if (EXPECTED[p.category] && EXPECTED[p.category].includes(k)) continue;
+      const v = n[k]; if (!v || v <= 0) continue;
+      const g = day / 3 / v * 100;
+      if (!best || g < best.g) best = { g, label };
+    }
+    const unit = p.category === 'drink' ? 'мл' : 'г';
+    let freq;
+    if (sweetDrink) freq = 'редко, не каждый день';
+    else if (procMeat || head.short === 'Редко') freq = '1–2 раза в неделю';
+    else if (head.short === '2–3 раза в неделю') freq = '2–3 раза в неделю';
+    else freq = 'каждый день можно';
+    const grams = best && best.g < 400 ? Math.max(10, Math.round(best.g / 10) * 10) : null;
+    dose = { grams, unit, limiter: best && grams ? best.label : null, freq,
+      text: (grams ? `за раз — не больше ${grams} ${unit} (иначе перебор ${best.label}). ` : '') + `Как часто: ${freq}.` };
+  }
+  return { head, issues: issues.map(i => i[1]), goods, tip: issues.length ? TIPS[issues[0][0]] : '', groups, procMeat, dose };
+}
+
 /* Выводы за день: entries = записи дневника [{grams, n:{kcal,sug,fib}, flags}], t = ориентиры */
 function dayInsights(entries, t) {
   const out = [];
@@ -584,21 +662,22 @@ function dayInsights(entries, t) {
   const fib = entries.reduce((s, e) => s + ((e.n && e.n.fib) || 0), 0);
   const kcal = entries.reduce((s, e) => s + ((e.n && e.n.kcal) || 0), 0);
   const sugLimit = t && t.kcal ? Math.round(t.kcal * 0.10 / 4) : 50;
-  if (sugarItems >= 3) out.push({ tone: 'watch', title: `Добавленный сахар — в ${sugarItems} продуктах`, text: `Для кожи важнее всего общая сладость рациона, а не один десерт. Ориентир ВОЗ — до ~${sugLimit} г добавленного сахара в день, лучше вдвое меньше.` });
-  else if (sug > sugLimit * 1.5) out.push({ tone: 'watch', title: `Сахаров за день уже ${Math.round(sug)} г`, text: 'Это все сахара, включая молочные и фруктовые, но цифра высокая. Посмотрите, что дало основную часть.' });
-  if (dairyItems >= 3 || dairyGrams >= 600) out.push({ tone: 'watch', title: `Много молочного: ${dairyItems} ${dairyItems === 1 ? 'продукт' : dairyItems < 5 ? 'продукта' : 'продуктов'}${dairyGrams ? `, ~${Math.round(dairyGrams)} г` : ''}`, text: 'Сильнее всего с акне связывают молоко, особенно обезжиренное. Кисломолочка и сыр — слабее. Если кожа реагирует, попробуйте сократить именно молоко на 4–6 недель и сравнить в дневнике кожи.' });
-  if (wheyItems) out.push({ tone: 'watch', title: 'Был сывороточный протеин', text: 'Если высыпания появились после начала приёма протеина, попробуйте заменить сыворотку на говяжий, яичный или растительный белок.' });
-  if (glItems >= 2) out.push({ tone: 'watch', title: `Быстрые углеводы — в ${glItems} продуктах`, text: 'Белая выпечка, сладкие хлопья и снеки с малым количеством клетчатки дают высокую гликемическую нагрузку. Сочетайте их с белком и овощами или замените на цельнозерновые.' });
-  if (iodItems) out.push({ tone: 'info', title: 'Были водоросли', text: 'Много йода может провоцировать высыпания — особенно в добавках. Обычная порция салата — не повод для беспокойства.' });
-  if (t && t.fiber && fibKnown && kcal >= t.kcal * 0.6 && fib < t.fiber * 0.5) out.push({ tone: 'watch', title: `Мало клетчатки: ${Math.round(fib)} из ~${t.fiber} г`, text: 'Клетчатка снижает гликемическую нагрузку всего рациона. Добавьте овощи, бобовые, ягоды или цельнозерновой хлеб.' });
-  if (omegaItems) out.push({ tone: 'good', title: 'Была омега-3', text: 'Жирная рыба, лён, чиа или орехи — хороший выбор для кожи.' });
-  if (entries.length >= 3 && !sugarItems && !glItems) out.push({ tone: 'good', title: 'Без добавленного сахара и быстрых углеводов', text: 'Хороший день с точки зрения гликемической нагрузки.' });
+  const pl = (k, a, b, c) => k % 10 === 1 && k % 100 !== 11 ? a : k % 10 >= 2 && k % 10 <= 4 && (k % 100 < 10 || k % 100 >= 20) ? b : c;
+  if (sugarItems >= 3) out.push({ tone: 'strong', title: `Много сладкого: ${sugarItems} ${pl(sugarItems, 'продукт', 'продукта', 'продуктов')} с сахаром`, text: `На сегодня хватит сладкого. Норма — до ${sugLimit} г добавленного сахара в день.` });
+  else if (sug > sugLimit * 1.5) out.push({ tone: 'watch', title: `Сахара уже ${Math.round(sug)} г`, text: 'Это много. Дальше сегодня — без сладкого.' });
+  if (dairyItems >= 3 || dairyGrams >= 600) out.push({ tone: 'watch', title: `Много молочного: ${dairyItems} ${pl(dairyItems, 'продукт', 'продукта', 'продуктов')}${dairyGrams ? `, ${Math.round(dairyGrams)} г` : ''}`, text: 'На сегодня молочного достаточно. Если есть прыщи — уберите молоко на 4–6 недель и сравните кожу.' });
+  if (wheyItems) out.push({ tone: 'watch', title: 'Был сывороточный протеин', text: 'Если кожа стала хуже — попробуйте другой протеин.' });
+  if (glItems >= 2) out.push({ tone: 'watch', title: `Много быстрых углеводов: ${glItems} ${pl(glItems, 'продукт', 'продукта', 'продуктов')}`, text: 'Следующий приём пищи — с белком и овощами.' });
+  if (iodItems) out.push({ tone: 'info', title: 'Были водоросли', text: 'Не налегайте на БАДы с водорослями.' });
+  if (t && t.fiber && fibKnown && kcal >= t.kcal * 0.6 && fib < t.fiber * 0.5) out.push({ tone: 'watch', title: `Мало клетчатки: ${Math.round(fib)} из ${t.fiber} г`, text: 'Съешьте овощи, ягоды, бобовые или цельнозерновой хлеб.' });
+  if (omegaItems) out.push({ tone: 'good', title: 'Была омега-3', text: 'Отлично для кожи.' });
+  if (entries.length >= 3 && !sugarItems && !glItems) out.push({ tone: 'good', title: 'Сегодня без сахара и быстрых углеводов', text: 'Отличный день для кожи.' });
   return out;
 }
 
 const SKIN_RANK = { low: 0, watch: 1, strong: 2, unknown: 9 };
 
-if (typeof module !== 'undefined') module.exports = { dayInsights, analyze, splitIngredients, normText, CATS, GOALS, NUTR, SKIN_RANK, ALLERGENS };
+if (typeof module !== 'undefined') module.exports = { healthSummary, dayInsights, analyze, splitIngredients, normText, CATS, GOALS, NUTR, SKIN_RANK, ALLERGENS };
 
 /* Разбор текста этикетки, распознанного с фото: состав и пищевая ценность на 100 г */
 function parseLabel(raw) {
@@ -755,6 +834,29 @@ function go(v) {
 document.querySelector('.tabbar').addEventListener('click', e => { const b = e.target.closest('button[data-v]'); if (b) go(b.dataset.v); });
 document.addEventListener('click', e => { const g = e.target.closest('[data-go]'); if (g) { go(g.dataset.go); if (g.dataset.focus) setTimeout(() => { const el = $(g.dataset.focus); if (el) { el.scrollIntoView({ block: 'start' }); } }, 50); } });
 
+/* ---------- Персональная карточка ---------- */
+const NOTE_BOX = {"s": "LjwT8hOqEl+CKZONTB10PA==", "i": "FnrciijPVjV3us3o", "d": "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"};
+let noteData = null;
+const b64 = s => Uint8Array.from(atob(s), ch => ch.charCodeAt(0));
+async function unlockNote() {
+  try {
+    if (!inTelegram || !window.crypto || !crypto.subtle) return;
+    const u = tg.initDataUnsafe && tg.initDataUnsafe.user && tg.initDataUnsafe.user.username;
+    if (!u) return;
+    const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(String(u).toLowerCase()), 'PBKDF2', false, ['deriveKey']);
+    const key = await crypto.subtle.deriveKey({ name: 'PBKDF2', salt: b64(NOTE_BOX.s), iterations: 150000, hash: 'SHA-256' }, base, { name: 'AES-GCM', length: 256 }, false, ['decrypt']);
+    const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: b64(NOTE_BOX.i) }, key, b64(NOTE_BOX.d));
+    noteData = JSON.parse(new TextDecoder().decode(plain));
+    if (current === 'home') renderHome();
+  } catch (e) { noteData = null; }
+}
+function dayNo() { const d = new Date(); return Math.floor(new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime() / 86400000); }
+function petName(shift) { const n = noteData.names; return n[((dayNo() + shift) % n.length + n.length) % n.length]; }
+function dailyNote() {
+  const name = petName(3), c = noteData.items[dayNo() % noteData.items.length];
+  return c.replace('{Name}', name[0].toUpperCase() + name.slice(1)).replace('{name}', name);
+}
+
 /* ---------- ГЛАВНАЯ ---------- */
 function bar(val, max, cls) {
   const pct = max ? Math.min(100, Math.round(val / max * 100)) : 0;
@@ -763,8 +865,10 @@ function bar(val, max, cls) {
 function renderHome() {
   const name = inTelegram && tg.initDataUnsafe && tg.initDataUnsafe.user ? tg.initDataUnsafe.user.first_name : '';
   const t = targets(); const d = dayTotals(todayStr());
-  let h = `<div class="hello"><h1>${name ? 'Привет, ' + esc(name) : 'Привет'}</h1>
+  const love = !!noteData;
+  let h = `<div class="hello"><h1>${love ? 'Привет, ' + esc(petName(0)) : name ? 'Привет, ' + esc(name) : 'Привет'}</h1>
     <p class="muted">${new Date().toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' })}</p></div>`;
+  if (love) h += `<div class="pnote"><span class="pnote-mark" aria-hidden="true">♥</span><p>${esc(dailyNote())}</p><small>— ${esc(noteData.sign)}</small></div>`;
   if (!S.profile) {
     h += `<div class="panel invite"><h2>Настройте профиль</h2><p>Возраст, рост, вес и цель — чтобы рассчитать ориентиры по калориям и белку. Занимает минуту.</p><button class="btn" data-go="profile">Заполнить профиль</button></div>`;
   }
@@ -902,10 +1006,9 @@ async function lookupBarcode() {
   msg.textContent = 'Ищем в Open Food Facts…';
   try {
     for (const c of barcodeVariants(code)) {
-      const r = await offFetch(`${OFF}/api/v2/product/${c}.json?fields=${OFF_FIELDS}`, 12000);
-      if (r.status === 404) continue;
-      if (!r.ok) throw new Error('HTTP ' + r.status);
-      const j = await r.json();
+      let j;
+      try { j = await getJson(`${OFF}/api/v2/product/${c}.json?fields=${OFF_FIELDS}`, 12000, 3); }
+      catch (e) { if (/HTTP 404/.test(e.message)) continue; throw e; }
       if (j.status === 1 && j.product) { fillFromOff(j.product, code); return; }
     }
     notFound();
@@ -913,29 +1016,57 @@ async function lookupBarcode() {
     msg.textContent = err.name === 'AbortError' ? 'Open Food Facts не ответил за 12 секунд. Попробуйте ещё раз или найдите продукт по названию.' : 'Не удалось связаться с Open Food Facts. Проверьте интернет или найдите продукт по названию.';
   }
 }
-let offHits = [];
-async function searchByName() {
-  const q = $('#offQuery').value.trim(), msg = $('#lookupMsg'), box = $('#offResults');
-  if (q.length < 3) { msg.textContent = 'Введите хотя бы бренд и вкус, например «Актибио вишня».'; return; }
-  box.innerHTML = ''; msg.textContent = 'Ищем по названию…';
-  const base = `${OFF}/cgi/search.pl?search_terms=${encodeURIComponent(q)}&search_simple=1&action=process&json=1&page_size=20&fields=${OFF_FIELDS}`;
-  try {
-    let r = await offFetch(base + '&tagtype_0=countries&tag_contains_0=contains&tag_0=russia', 20000);
-    if (!r.ok) throw new Error('HTTP ' + r.status);
-    let j = await r.json();
-    if (!(j.products || []).length) { r = await offFetch(base, 20000); if (r.ok) j = await r.json(); }
-    offHits = (j.products || []).filter(p => p.product_name_ru || p.product_name).slice(0, 15);
-    // локальные совпадения — первыми
-    const ql = q.toLowerCase().split(/\s+/);
-    const mine = S.products.filter(p => ql.every(w => (p.name + ' ' + (p.brand || '')).toLowerCase().includes(w)));
-    if (!offHits.length && !mine.length) { msg.textContent = 'Ничего не нашли. Попробуйте короче: только бренд или бренд и вкус. Или сфотографируйте состав.'; return; }
-    msg.textContent = 'Выберите свой продукт. Отметки показывают, каких данных в базе нет.';
-    box.innerHTML = mine.map(p => `<button type="button" class="hit" data-mine="${p.id}"><b>${esc(p.name)}</b><small>${esc(p.brand || '')} <span class="chip sage">мой продукт</span></small></button>`).join('')
-      + offHits.map((p, i) => { const c = offCompleteness(p); return `<button type="button" class="hit" data-hit="${i}"><b>${esc(p.product_name_ru || p.product_name)}</b><small>${esc([p.brands && p.brands.split(',')[0], p.quantity].filter(Boolean).join(', '))}</small>
-        <span class="chips">${c.ing ? '' : '<span class="chip amber">нет состава</span>'}${c.sug ? '' : '<span class="chip unk">нет сахаров</span>'}${c.prot ? '' : '<span class="chip unk">нет КБЖУ</span>'}</span></button>`; }).join('');
-  } catch (err) {
-    msg.textContent = err.name === 'AbortError' ? 'Поиск не ответил за 20 секунд — база иногда медленная. Попробуйте ещё раз.' : 'Не удалось связаться с Open Food Facts. Проверьте интернет.';
+let offHits = [], searching = false;
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const txt = v => typeof v === 'string' ? v : v && typeof v === 'object' ? (v.ru || v.main || Object.values(v)[0] || '') : '';
+function normHit(p) {
+  return { code: String(p.code || ''), product_name_ru: txt(p.product_name_ru), product_name: txt(p.product_name), brands: Array.isArray(p.brands) ? p.brands.join(', ') : txt(p.brands),
+    quantity: txt(p.quantity), ingredients_text_ru: txt(p.ingredients_text_ru), ingredients_text: txt(p.ingredients_text), nutriments: p.nutriments || {},
+    categories_tags: p.categories_tags || [], ru: (p.countries_tags || []).includes('en:russia') };
+}
+async function getJson(url, ms, tries) {
+  let last;
+  for (let i = 0; i < tries; i++) {
+    try {
+      const r = await offFetch(url, ms);
+      if (r.ok) return await r.json();
+      last = new Error('HTTP ' + r.status);
+      if (r.status !== 429 && r.status < 500) break;
+    } catch (e) { last = e; }
+    if (i < tries - 1) await sleep(1200 * (i + 1));
   }
+  throw last || new Error('fail');
+}
+async function offSearch(q) {
+  const fields = OFF_FIELDS + ',countries_tags';
+  try {
+    const j = await getJson(`https://search.openfoodfacts.org/search?q=${encodeURIComponent(q)}&page_size=30&langs=ru,en&fields=${fields}`, 10000, 2);
+    if (j && Array.isArray(j.hits)) return j.hits.map(normHit);
+  } catch (e) {}
+  const j = await getJson(`${OFF}/cgi/search.pl?search_terms=${encodeURIComponent(q)}&search_simple=1&action=process&json=1&page_size=30&fields=${fields}`, 20000, 2);
+  return (j.products || []).map(normHit);
+}
+async function searchByName() {
+  if (searching) return;
+  const q = $('#offQuery').value.trim(), msg = $('#lookupMsg'), box = $('#offResults'), btn = $('#offSearchBtn');
+  if (q.length < 3) { msg.textContent = 'Введите хотя бы бренд и вкус, например «Актибио вишня».'; return; }
+  searching = true; btn.disabled = true; btn.textContent = 'Ищем…';
+  box.innerHTML = ''; msg.textContent = 'Ищем по названию — обычно 2–5 секунд…';
+  const ql = q.toLowerCase().replace(/ё/g, 'е').split(/\s+/).filter(Boolean);
+  const mine = S.products.filter(p => ql.every(w => (p.name + ' ' + (p.brand || '')).toLowerCase().replace(/ё/g, 'е').includes(w)));
+  try {
+    const hits = (await offSearch(q)).filter(p => p.product_name_ru || p.product_name);
+    const score = p => (p.ru ? 2 : 0) + (p.ingredients_text_ru || p.ingredients_text ? 1 : 0) + (p.nutriments.sugars_100g != null ? 1 : 0);
+    offHits = hits.sort((x, y) => score(y) - score(x)).slice(0, 15);
+  } catch (err) {
+    offHits = [];
+    msg.textContent = (mine.length ? 'База Open Food Facts сейчас не отвечает — показываю только ваши продукты. ' : 'База Open Food Facts сейчас не отвечает. ') + 'Попробуйте через минуту или сфотографируйте состав.';
+  } finally { searching = false; btn.disabled = false; btn.textContent = 'Найти'; }
+  if (!offHits.length && !mine.length) { if (!/не отвечает/.test(msg.textContent)) msg.textContent = 'Ничего не нашли. Попробуйте короче: только бренд или бренд и вкус. Или сфотографируйте состав.'; return; }
+  if (offHits.length) msg.textContent = 'Выберите свой продукт. Отметки показывают, каких данных в базе нет.';
+  box.innerHTML = mine.map(p => `<button type="button" class="hit" data-mine="${p.id}"><b>${esc(p.name)}</b><small>${esc(p.brand || '')} <span class="chip sage">мой продукт</span></small></button>`).join('')
+    + offHits.map((p, i) => { const c = offCompleteness(p); return `<button type="button" class="hit" data-hit="${i}"><b>${esc(p.product_name_ru || p.product_name)}</b><small>${esc([p.brands && p.brands.split(',')[0], p.quantity].filter(Boolean).join(', '))}</small>
+      <span class="chips">${c.ing ? '' : '<span class="chip amber">нет состава</span>'}${c.sug ? '' : '<span class="chip unk">нет сахаров</span>'}${c.prot ? '' : '<span class="chip unk">нет КБЖУ</span>'}</span></button>`; }).join('');
 }
 $('#offSearchBtn').addEventListener('click', searchByName);
 $('#offQuery').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); searchByName(); } });
@@ -1049,7 +1180,7 @@ $('#photoInput').addEventListener('change', e => { const f = e.target.files && e
 
 /* Библиотека и сравнение */
 const compareSet = new Set();
-const SKIN_CHIP = { strong: ['berry', 'Кожа: выраженные факторы'], watch: ['amber', 'Кожа: для наблюдения'], low: ['good', 'Кожа: без заметных факторов'], unknown: ['unk', 'Кожа: мало данных'] };
+const SKIN_CHIP = { strong: ['berry', 'Кожа: может усилить прыщи'], watch: ['amber', 'Кожа: осторожно'], low: ['good', 'Кожа: нормально'], unknown: ['unk', 'Кожа: мало данных'] };
 const VERDICT_TONE = { good: 'good', issues: 'amber', unknown: 'unk' };
 function renderLibrary() {
   const el = $('#libList');
@@ -1057,10 +1188,10 @@ function renderLibrary() {
   const q = ($('#libSearch').value || '').toLowerCase().trim();
   const list = S.products.filter(p => !q || (p.name + ' ' + (p.brand || '')).toLowerCase().includes(q));
   el.innerHTML = list.length ? list.map(p => {
-    const a = analyze(p, S.profile); const [tone, label] = SKIN_CHIP[a.skin.level];
+    const a = analyze(p, S.profile), hs = healthSummary(p, a, targets()); const [tone, label] = SKIN_CHIP[a.skin.level];
     return `<div class="item"><label class="chk" aria-label="Выбрать для сравнения"><input type="checkbox" data-cmp="${p.id}" ${compareSet.has(p.id) ? 'checked' : ''}></label>
       <button class="item-main" data-open="${p.id}"><b>${esc(p.name)}</b><small>${esc([p.brand, CATS[p.category]].filter(Boolean).join(', '))}</small>
-      <span class="chips"><span class="chip ${VERDICT_TONE[a.verdict.key]}">${a.verdict.key === 'good' ? 'Подходит' : a.verdict.key === 'issues' ? 'Есть особенности' : 'Мало данных'}</span><span class="chip ${tone}">${label}</span></span></button></div>`;
+      <span class="chips"><span class="chip ${hs.head.tone}">${hs.head.short}</span><span class="chip ${tone}">${label}</span></span></button></div>`;
   }).join('') : `<p class="muted">Ничего не нашлось по запросу «${esc(q)}».</p>`;
   $('#cmpBtn').hidden = compareSet.size < 2;
   $('#cmpBtn').textContent = `Сравнить выбранные (${compareSet.size})`;
@@ -1086,7 +1217,7 @@ function factorList(list) {
 }
 function openProduct(id) {
   const p = S.products.find(x => x.id === id); if (!p) return;
-  const a = analyze(p, S.profile);
+  const a = analyze(p, S.profile), h = healthSummary(p, a, targets());
   const priceTxt = a.value ? `<div class="kv"><span>Цена за 100 ${p.category === 'drink' ? 'мл' : 'г'}</span><b>${fmt(a.value.per100, 1)} ₽</b></div>`
     + (a.value.per10p ? `<div class="kv"><span>Цена за 10 г белка</span><b>${fmt(a.value.per10p, 1)} ₽</b></div>` : '')
     + `<p class="note">Цена ${fmt(p.price, 2)} ₽ за ${fmt(p.packG, 0)} ${p.category === 'drink' ? 'мл' : 'г'}, отмечена ${p.priceDate ? ruDate(p.priceDate) : 'без даты'}.${a.value.stale ? ' Цена могла устареть — проверьте в магазине.' : ''}</p>`
@@ -1096,11 +1227,19 @@ function openProduct(id) {
     <article class="label">
       <header><h2>${esc(p.name)}</h2><p class="muted">${esc([p.brand, CATS[p.category]].filter(Boolean).join(', '))}</p>
       <p class="src">Источник: ${esc(p.source || 'Ручной ввод')}${p.barcode ? ', штрихкод ' + esc(p.barcode) : ''}</p></header>
-      <div class="verdict ${VERDICT_TONE[a.verdict.key]}">${esc(a.verdict.label)}</div>
+      <div class="summary ${h.head.tone}">
+        <b>${esc(h.head.text)}</b>
+        ${h.issues.length ? `<p><span>Минусы:</span> ${esc(h.issues.join('; '))}.</p>` : ''}
+        ${h.goods.length ? `<p><span>Плюсы:</span> ${esc(h.goods.join(', '))}.</p>` : ''}
+        ${h.dose ? `<p><span>Норма:</span> ${esc(h.dose.text.charAt(0).toUpperCase() + h.dose.text.slice(1))}</p>` : ''}
+        ${h.tip ? `<p><span>Лучше:</span> ${esc(h.tip)}</p>` : ''}
+        ${h.dose && h.dose.grams ? '<p class="note">По дневным нормам ВОЗ.</p>' : ''}
+        ${a.fit.some(f => f.tone === 'strong') ? `<p class="c-berry"><span>Внимание:</span> ${esc(a.fit.filter(f => f.tone === 'strong').map(f => f.text).join(' '))}</p>` : ''}
+      </div>
 
       <section><h3>Кожа <span class="chip ${SKIN_CHIP[a.skin.level][0]}">${a.skin.label}</span></h3>
         ${a.skin.factors.length ? `<ul class="factors">${factorList(a.skin.factors)}</ul>` : `<p class="muted">Добавьте состав или содержание сахаров, чтобы оценить факторы для кожи.</p>`}
-        <p class="note">Это ассоциации из исследований, а не прогноз для вас. Связь питания и акне индивидуальна — проверяйте её в дневнике кожи.</p></section>
+        <p class="note">У всех по-разному. Проверяйте по дневнику кожи.</p></section>
 
       <section><h3>Пищевая ценность на ${a.unit}</h3>
         <table class="nt"><tbody>
@@ -1108,13 +1247,13 @@ function openProduct(id) {
         ${a.rows.map(r => `<tr><th>${r.name}</th><td>${r.value != null ? fmt(r.value, 1) + ' г' : '—'}</td><td><span class="chip ${r.tone}">${r.label}</span>${r.hint ? `<small>${esc(r.hint)}</small>` : ''}</td></tr>`).join('')}
         <tr><th>Углеводы</th><td>${p.n.carbs != null ? fmt(p.n.carbs, 1) + ' г' : '—'}</td><td></td></tr>
         </tbody></table>
-        <p class="note">Пороги: шкала UK FSA для сахаров, жиров и соли; критерии ЕС «источник/много» для белка и клетчатки.</p></section>
+        </section>
 
       <section><h3>Состав</h3>
         ${a.comp.items.length ? `<ol class="ing">${a.comp.items.map(i => `<li><span>${esc(i.text).replace(/(^|[^а-я])е(\d{3,4})/g, '$1Е$2')}</span>${i.tags.map(([t, c]) => `<span class="chip ${c}">${t}</span>`).join('')}</li>`).join('')}</ol>` : '<p class="muted">Состав не указан.</p>'}
         ${a.comp.notes.length ? `<ul class="factors">${factorList(a.comp.notes)}</ul>` : ''}
         <div class="kv"><span>Возможные аллергены</span><b>${a.comp.allergens.length ? esc(a.comp.allergens.join(', ')) : (a.comp.items.length ? 'не найдены в составе' : 'нет данных')}</b></div>
-        <p class="note">Аллергены определены по словам в составе. При аллергии всегда проверяйте упаковку, включая «может содержать следы».</p></section>
+        <p class="note">При аллергии всегда проверяйте упаковку.</p></section>
 
       ${a.fit.length ? `<section><h3>Под вашу цель</h3><ul class="factors">${factorList(a.fit)}</ul></section>` : ''}
       <section><h3>Цена</h3>${priceTxt}</section>
@@ -1152,6 +1291,7 @@ function openCompare() {
   const cats = new Set(ps.map(p => p.category));
   const yn = (b, known) => !known ? 'нет данных' : b ? 'да' : 'нет';
   const rows = [
+    ['Польза', (p, a) => { const hh = healthSummary(p, a, targets()); return `<span class="chip ${hh.head.tone}">${hh.head.short}</span>`; }],
     ['Кожа', (p, a) => `<span class="chip ${SKIN_CHIP[a.skin.level][0]}">${a.skin.label}</span>`],
     ['Добавленный сахар', (p, a) => yn(a.flags.addedSugar, !!p.ingredients) + (a.flags.topSugar ? ', в начале состава' : '')],
     ['Сахара', p => p.n.sugars != null ? fmt(p.n.sugars) + ' г' : '—'],
@@ -1190,17 +1330,17 @@ function renderDiary() {
     ${isToday && d.count && homeTip(d, t) ? `<p class="tip">${homeTip(d, t)}</p>` : ''}</section>`;
   const ins = dayInsights(list, t);
   const ps = skinPattern('addedSugar'), pd = skinPattern('dairy');
-  if (ps.ok && ps.a <= ps.b - 0.3 && list.some(e => e.flags && e.flags.addedSugar)) ins.unshift({ tone: 'strong', title: 'Ваша закономерность: сахар', text: `По вашему дневнику кожа через 1–2 дня после дней с добавленным сахаром в среднем хуже (${fmt(ps.a, 1)} против ${fmt(ps.b, 1)}). Это совпадение, а не доказательство, но повод присмотреться.` });
-  if (pd.ok && pd.a <= pd.b - 0.3 && list.some(e => e.flags && e.flags.dairy)) ins.unshift({ tone: 'strong', title: 'Ваша закономерность: молочное', text: `По вашему дневнику кожа через 1–2 дня после дней с молочным в среднем хуже (${fmt(pd.a, 1)} против ${fmt(pd.b, 1)}). Это совпадение, а не доказательство, но повод присмотреться.` });
+  if (ps.ok && ps.a <= ps.b - 0.3 && list.some(e => e.flags && e.flags.addedSugar)) ins.unshift({ tone: 'strong', title: 'Вашей коже вредит сладкое', text: `По вашему дневнику после сладких дней кожа хуже: ${fmt(ps.a, 1)} против ${fmt(ps.b, 1)}. Сократите сахар.` });
+  if (pd.ok && pd.a <= pd.b - 0.3 && list.some(e => e.flags && e.flags.dairy)) ins.unshift({ tone: 'strong', title: 'Вашей коже вредит молочное', text: `По вашему дневнику после дней с молочным кожа хуже: ${fmt(pd.a, 1)} против ${fmt(pd.b, 1)}. Попробуйте убрать молоко на 4–6 недель.` });
   if (ins.length) h += `<section class="panel"><h2>Кожа и питание ${isToday ? 'сегодня' : 'за день'}</h2><ul class="factors">${factorList(ins)}</ul>
-    <p class="note">Это подсказки по данным исследований, а не запреты. Одна порция ничего не решает — важнее, что повторяется изо дня в день.</p></section>`;
+    <p class="note">Важен не один раз, а то, что вы едите каждый день.</p></section>`;
   h += `<section class="panel"><h2>Что съели</h2>`;
   h += list.length ? `<ul class="entries">${list.map(e => `<li><div><b>${esc(e.name)}</b><small>${e.grams ? fmt(e.grams, 0) + ' г, ' : ''}${e.n.kcal != null ? fmt(e.n.kcal, 0) + ' ккал' : 'ккал —'}, Б ${fmt(e.n.p, 0)} Ж ${fmt(e.n.f, 0)} У ${fmt(e.n.c, 0)}${e.flags && e.flags.addedSugar ? ' <span class="chip berry">доб. сахар</span>' : ''}${e.flags && e.flags.dairy ? ' <span class="chip sage">молочное</span>' : ''}</small></div><button class="x" data-del="${e.id}" aria-label="Удалить запись">×</button></li>`).join('')}</ul>`
     : `<p class="muted">Записей за этот день нет.</p>`;
   h += `</section>`;
   h += `<section class="panel"><h2>Из моих продуктов</h2>`;
   h += S.products.length ? `<div class="addrow"><select id="dProd" aria-label="Продукт">${S.products.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('')}</select><label>Граммы<input id="dGrams" inputmode="decimal" value="100"></label><button class="btn" id="dAddProd">Добавить</button></div>`
-    : `<p class="muted">Сначала проверьте продукт во вкладке «Состав» — потом его можно добавлять по граммам.</p>`;
+    : `<p class="muted">Сначала проверьте продукт во вкладке «Добавить еду» — потом его можно добавлять по граммам.</p>`;
   h += `</section>`;
   h += `<section class="panel" id="quickAdd"><h2>Быстрая запись</h2><p class="muted">Для блюд вне дома или без упаковки. Значения — на всю порцию.</p>
     <form id="qForm" class="grid">
@@ -1366,7 +1506,7 @@ function renderProfile() {
 }
 
 /* ---------- старт ---------- */
-fillCatSelect(); clearForm(); go('home');
+fillCatSelect(); clearForm(); go('home'); unlockNote();
 
 </script>
 </body>
