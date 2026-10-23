@@ -329,6 +329,11 @@ const HYDRO_RE = /гидрогенизир|маргарин|кулинарн[а-
 const PALM_RE = /пальмов|пальмоядров/;
 const REFINED_RE = /мука\s+пшеничн|пшеничн[а-я]*\s+мука|крахмал|рисов[а-я]*\s+мук|кукурузн[а-я]*\s+мук|манн[а-я]*\s+круп|(^|[^а-я])рис\s+белый|белый\s+рис/;
 const WHOLE_RE = /цельнозерн|отруб|овсян|гречн|гречк|киноа|булгур|полб|бур[а-я]*\s+рис|ячнев|перлов|обдирн/;
+const CHOC_RE = /шоколад|какао/;
+const COCOA_BUTTER_RE = /масл[а-я]*\s+какао|какао[-\s]*масл/;
+const IODINE_RE = /ламинари|морск[а-я]*\s+капуст|келп|фукус|(^|[^а-я])нори|водоросл|спирулин/;
+const B12_RE = /цианокобаламин|витамин[а-я]*\s*[bв]\s?12/;
+const OMEGA3_RE = /лосос|семг|скумбри|сельд|сардин|форел|кижуч|(^|[^а-я])льн[а-я]*|семен[а-я]*\s+льна|(^|[^а-я])чиа|грецк|рыбий\s+жир|омега-?\s?3/;
 const ECODE_RE = /(^|[^а-я])е\s?-?(\d{3,4}[а-яa-z]?)/g;
 const ALLERGENS = {
   gluten: { label: 'Злаки с глютеном', re: /пшени|(^|[^а-я])рож|ржан|ячмен|ячн|овес|овс|спельт|полб|глютен|клейковин|манн/ },
@@ -394,6 +399,7 @@ function analyze(p, profile, now) {
   const items = splitIngredients(p.ingredients);
   const hasIng = items.length > 0;
   const added = [], sweet = [], ecodes = new Set(), allergens = new Set();
+  let choc = false, iodine = false, b12 = false, omega3 = false;
   let dairy = false, whey = false, zmzh = false, hydro = false, palm = false, refinedTop = false, whole = false;
 
   const tagged = items.map((it, i) => {
@@ -411,6 +417,10 @@ function analyze(p, profile, now) {
     if (PALM_RE.test(it)) { palm = true; tags.push(['пальмовое масло', 'plain']); }
     if (i <= 2 && REFINED_RE.test(it) && !/цельнозерн/.test(it)) { refinedTop = true; tags.push(['рафинированная мука или крахмал', 'plain']); }
     if (WHOLE_RE.test(it)) { whole = true; tags.push(['цельное зерно', 'good']); }
+    if (CHOC_RE.test(it) && (/шоколад/.test(it) || !COCOA_BUTTER_RE.test(it))) { choc = true; tags.push(['какао/шоколад', 'plain']); }
+    if (IODINE_RE.test(it)) { iodine = true; tags.push(['водоросли (йод)', 'amber']); }
+    if (B12_RE.test(it)) { b12 = true; tags.push(['витамин B12', 'plain']); }
+    if (OMEGA3_RE.test(it)) { omega3 = true; tags.push(['омега-3', 'good']); }
     let m; ECODE_RE.lastIndex = 0;
     while ((m = ECODE_RE.exec(it))) ecodes.add('Е' + m[2].toUpperCase());
     for (const [k, a] of Object.entries(ALLERGENS)) {
@@ -477,7 +487,8 @@ function analyze(p, profile, now) {
       sf.push({ tone: 'good', title: 'Мало сахаров', text: `${fmt1(n.sugars)} г на ${unit}.` });
     }
   }
-  if (n.carbs != null && n.carbs >= 50 && (n.fiber == null || n.fiber < FIBER_SOURCE) && (refinedTop || topSugar)) {
+  const gl = n.carbs != null && n.carbs >= 50 && (n.fiber == null || n.fiber < FIBER_SOURCE) && (refinedTop || topSugar);
+  if (gl) {
     sf.push({ tone: 'watch', title: 'Быстрые углеводы и мало клетчатки',
       text: 'Похоже на продукт с высокой гликемической нагрузкой — этот фактор в исследованиях связывают с акне. Точный гликемический индекс по этикетке определить нельзя: многое зависит от порции и того, с чем вы его едите.' });
   }
@@ -491,6 +502,22 @@ function analyze(p, profile, now) {
   } else if (dairy) {
     sf.push({ tone: profile.dairyWatch ? 'watch' : 'info', title: 'Молочный продукт',
       text: 'Связь с акне чаще описывали для молока, особенно обезжиренного. По йогуртам и сырам данные слабее и противоречивее. Это повод понаблюдать за собой в дневнике кожи, а не повод исключать молочное.' });
+  }
+  if (choc) {
+    sf.push({ tone: 'info', title: 'Шоколад или какао',
+      text: 'Данные о связи шоколада с акне слабые и противоречивые. Чаще всего дело не в какао, а в сахаре и молоке, которые идут вместе с ним. Тёмный шоколад с высоким процентом какао — более мягкий вариант.' });
+  }
+  if (iodine) {
+    sf.push({ tone: 'watch', title: 'Водоросли — много йода',
+      text: 'Избыток йода описан как возможный провокатор акнеподобных высыпаний, чаще при приёме добавок с водорослями. В обычной порции салата из морской капусты это вряд ли проблема, но в БАДах и смузи с водорослями дозы бывают большими.' });
+  }
+  if (b12) {
+    sf.push({ tone: 'info', title: 'Добавлен витамин B12',
+      text: 'Высокие дозы B12 (обычно уколы и мегадозы в добавках) описаны как возможная причина акнеподобных высыпаний. В обычных продуктах с витаминами доза небольшая.' });
+  }
+  if (omega3) {
+    sf.push({ tone: 'good', title: 'Источник омега-3',
+      text: 'Жирная рыба, лён, чиа и грецкие орехи дают омега-3. Небольшие исследования показывают, что омега-3 может уменьшать воспалительные высыпания.' });
   }
   if (sweet.length) {
     sf.push({ tone: 'info', title: 'Подсластители',
@@ -540,14 +567,38 @@ function analyze(p, profile, now) {
     verdict, missing, rows, unit,
     skin: { level: skinLevel, label: SKIN_LABEL[skinLevel], factors: sf },
     comp: { items: tagged, notes, allergens: [...allergens].map(k => ALLERGENS[k].label), ecodes: [...ecodes] },
-    flags: { addedSugar: added.length > 0, topSugar, dairy, whey },
+    flags: { addedSugar: added.length > 0, topSugar, dairy, whey, gl, choc, iodine, b12, omega3 },
     fit, value
   };
 }
 
+/* Выводы за день: entries = записи дневника [{grams, n:{kcal,sug,fib}, flags}], t = ориентиры */
+function dayInsights(entries, t) {
+  const out = [];
+  if (!entries.length) return out;
+  const cnt = f => entries.filter(e => e.flags && e.flags[f]).length;
+  const sugarItems = cnt('addedSugar'), dairyItems = cnt('dairy'), glItems = cnt('gl'), wheyItems = cnt('whey'), iodItems = cnt('iodine'), omegaItems = cnt('omega3');
+  const dairyGrams = entries.filter(e => e.flags && e.flags.dairy && e.grams).reduce((s, e) => s + e.grams, 0);
+  const sug = entries.reduce((s, e) => s + ((e.n && e.n.sug) || 0), 0);
+  const fibKnown = entries.some(e => e.n && e.n.fib != null);
+  const fib = entries.reduce((s, e) => s + ((e.n && e.n.fib) || 0), 0);
+  const kcal = entries.reduce((s, e) => s + ((e.n && e.n.kcal) || 0), 0);
+  const sugLimit = t && t.kcal ? Math.round(t.kcal * 0.10 / 4) : 50;
+  if (sugarItems >= 3) out.push({ tone: 'watch', title: `Добавленный сахар — в ${sugarItems} продуктах`, text: `Для кожи важнее всего общая сладость рациона, а не один десерт. Ориентир ВОЗ — до ~${sugLimit} г добавленного сахара в день, лучше вдвое меньше.` });
+  else if (sug > sugLimit * 1.5) out.push({ tone: 'watch', title: `Сахаров за день уже ${Math.round(sug)} г`, text: 'Это все сахара, включая молочные и фруктовые, но цифра высокая. Посмотрите, что дало основную часть.' });
+  if (dairyItems >= 3 || dairyGrams >= 600) out.push({ tone: 'watch', title: `Много молочного: ${dairyItems} ${dairyItems === 1 ? 'продукт' : dairyItems < 5 ? 'продукта' : 'продуктов'}${dairyGrams ? `, ~${Math.round(dairyGrams)} г` : ''}`, text: 'Сильнее всего с акне связывают молоко, особенно обезжиренное. Кисломолочка и сыр — слабее. Если кожа реагирует, попробуйте сократить именно молоко на 4–6 недель и сравнить в дневнике кожи.' });
+  if (wheyItems) out.push({ tone: 'watch', title: 'Был сывороточный протеин', text: 'Если высыпания появились после начала приёма протеина, попробуйте заменить сыворотку на говяжий, яичный или растительный белок.' });
+  if (glItems >= 2) out.push({ tone: 'watch', title: `Быстрые углеводы — в ${glItems} продуктах`, text: 'Белая выпечка, сладкие хлопья и снеки с малым количеством клетчатки дают высокую гликемическую нагрузку. Сочетайте их с белком и овощами или замените на цельнозерновые.' });
+  if (iodItems) out.push({ tone: 'info', title: 'Были водоросли', text: 'Много йода может провоцировать высыпания — особенно в добавках. Обычная порция салата — не повод для беспокойства.' });
+  if (t && t.fiber && fibKnown && kcal >= t.kcal * 0.6 && fib < t.fiber * 0.5) out.push({ tone: 'watch', title: `Мало клетчатки: ${Math.round(fib)} из ~${t.fiber} г`, text: 'Клетчатка снижает гликемическую нагрузку всего рациона. Добавьте овощи, бобовые, ягоды или цельнозерновой хлеб.' });
+  if (omegaItems) out.push({ tone: 'good', title: 'Была омега-3', text: 'Жирная рыба, лён, чиа или орехи — хороший выбор для кожи.' });
+  if (entries.length >= 3 && !sugarItems && !glItems) out.push({ tone: 'good', title: 'Без добавленного сахара и быстрых углеводов', text: 'Хороший день с точки зрения гликемической нагрузки.' });
+  return out;
+}
+
 const SKIN_RANK = { low: 0, watch: 1, strong: 2, unknown: 9 };
 
-if (typeof module !== 'undefined') module.exports = { analyze, splitIngredients, normText, CATS, GOALS, NUTR, SKIN_RANK, ALLERGENS };
+if (typeof module !== 'undefined') module.exports = { dayInsights, analyze, splitIngredients, normText, CATS, GOALS, NUTR, SKIN_RANK, ALLERGENS };
 
 /* Разбор текста этикетки, распознанного с фото: состав и пищевая ценность на 100 г */
 function parseLabel(raw) {
@@ -689,7 +740,7 @@ function entryFromProduct(p, grams, date) {
   const a = analyze(p, S.profile);
   return { id: uid(), date, name: p.name, productId: p.id, grams,
     n: { kcal: m(n.kcal), p: m(n.protein), f: m(n.fat), c: m(n.carbs), sug: m(n.sugars), fib: m(n.fiber) },
-    flags: { addedSugar: a.flags.addedSugar, dairy: a.flags.dairy } };
+    flags: { addedSugar: a.flags.addedSugar, dairy: a.flags.dairy, whey: a.flags.whey, gl: a.flags.gl, choc: a.flags.choc, iodine: a.flags.iodine, omega3: a.flags.omega3 } };
 }
 
 /* ---------- навигация ---------- */
@@ -1137,6 +1188,12 @@ function renderDiary() {
       <div><span>Молочных продуктов</span><b>${d.dairyItems}</b></div></div>` : ''}
     ${d.incomplete ? `<p class="note">У ${d.incomplete} записей нет части данных — итоги неполные.</p>` : ''}
     ${isToday && d.count && homeTip(d, t) ? `<p class="tip">${homeTip(d, t)}</p>` : ''}</section>`;
+  const ins = dayInsights(list, t);
+  const ps = skinPattern('addedSugar'), pd = skinPattern('dairy');
+  if (ps.ok && ps.a <= ps.b - 0.3 && list.some(e => e.flags && e.flags.addedSugar)) ins.unshift({ tone: 'strong', title: 'Ваша закономерность: сахар', text: `По вашему дневнику кожа через 1–2 дня после дней с добавленным сахаром в среднем хуже (${fmt(ps.a, 1)} против ${fmt(ps.b, 1)}). Это совпадение, а не доказательство, но повод присмотреться.` });
+  if (pd.ok && pd.a <= pd.b - 0.3 && list.some(e => e.flags && e.flags.dairy)) ins.unshift({ tone: 'strong', title: 'Ваша закономерность: молочное', text: `По вашему дневнику кожа через 1–2 дня после дней с молочным в среднем хуже (${fmt(pd.a, 1)} против ${fmt(pd.b, 1)}). Это совпадение, а не доказательство, но повод присмотреться.` });
+  if (ins.length) h += `<section class="panel"><h2>Кожа и питание ${isToday ? 'сегодня' : 'за день'}</h2><ul class="factors">${factorList(ins)}</ul>
+    <p class="note">Это подсказки по данным исследований, а не запреты. Одна порция ничего не решает — важнее, что повторяется изо дня в день.</p></section>`;
   h += `<section class="panel"><h2>Что съели</h2>`;
   h += list.length ? `<ul class="entries">${list.map(e => `<li><div><b>${esc(e.name)}</b><small>${e.grams ? fmt(e.grams, 0) + ' г, ' : ''}${e.n.kcal != null ? fmt(e.n.kcal, 0) + ' ккал' : 'ккал —'}, Б ${fmt(e.n.p, 0)} Ж ${fmt(e.n.f, 0)} У ${fmt(e.n.c, 0)}${e.flags && e.flags.addedSugar ? ' <span class="chip berry">доб. сахар</span>' : ''}${e.flags && e.flags.dairy ? ' <span class="chip sage">молочное</span>' : ''}</small></div><button class="x" data-del="${e.id}" aria-label="Удалить запись">×</button></li>`).join('')}</ul>`
     : `<p class="muted">Записей за этот день нет.</p>`;
@@ -1152,6 +1209,7 @@ function renderDiary() {
       <label>Жиры, г<input id="qF" inputmode="decimal"></label><label>Углеводы, г<input id="qC" inputmode="decimal"></label>
       <label class="check wide"><input type="checkbox" id="qSug"> Было с добавленным сахаром (десерт, сладкий напиток, соус)</label>
       <label class="check wide"><input type="checkbox" id="qDairy"> Было молочное</label>
+      <label class="check wide"><input type="checkbox" id="qGl"> Была белая выпечка, сладкие хлопья или снеки</label>
       <button class="btn wide">Записать</button></form></section>`;
   $('#diaryBody').innerHTML = h;
   if ($('#skinBody') && $('#skinBody').innerHTML) renderSkin();
@@ -1167,7 +1225,7 @@ function renderDiary() {
     if (vals.some(v => v != null && v < 0)) { toast('Значения не могут быть отрицательными'); return; }
     S.diary.push({ id: uid(), date: diaryDate, name: $('#qName').value.trim(), productId: null, grams: null,
       n: { kcal: vals[0], p: vals[1], f: vals[2], c: vals[3], sug: null, fib: null },
-      flags: { addedSugar: $('#qSug').checked, dairy: $('#qDairy').checked } });
+      flags: { addedSugar: $('#qSug').checked, dairy: $('#qDairy').checked, gl: $('#qGl').checked } });
     if (save()) { haptic(); renderDiary(); }
   };
   $('#diaryBody').querySelectorAll('[data-del]').forEach(b => b.onclick = async () => {
