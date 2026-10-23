@@ -1,0 +1,1112 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>NUTRIQ — состав, кожа, форма</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&family=Unbounded:wght@600;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#F2F5F1; --surface:#FFFFFF; --ink:#16201B; --muted:#5B6860; --line:#D6DED8;
+  --sage:#2C5E4D; --sage-soft:#E0ECE6; --good:#2A7A4B; --good-soft:#E1F2E7;
+  --amber:#9A6206; --amber-soft:#FBEFD6; --berry:#A3344F; --berry-soft:#F8E1E7; --unk:#6E7872; --unk-soft:#E9ECEA;
+  --display:"Unbounded", "Arial Black", system-ui, sans-serif;
+  --body:"Onest", -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  color-scheme:light;
+}
+:root[data-theme="dark"]{
+  --paper:#121614; --surface:#1A201D; --ink:#E7EDE9; --muted:#9BA7A0; --line:#2B3530;
+  --sage:#86C2AB; --sage-soft:#1E2F28; --good:#7FD39F; --good-soft:#1B3125;
+  --amber:#E8B04A; --amber-soft:#35291A; --berry:#EE8AA3; --berry-soft:#3B2129; --unk:#9BA7A0; --unk-soft:#262D29;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.5 var(--body);
+  padding:env(safe-area-inset-top,0) 0 calc(76px + env(safe-area-inset-bottom,0));}
+body.locked{overflow:hidden}
+main{max-width:560px;margin:0 auto;padding:12px 16px 24px}
+h1{font:800 26px/1.15 var(--display);letter-spacing:-.01em;margin:8px 0 14px}
+h2{font:600 17px/1.3 var(--body);margin:0 0 10px}
+h3{font:600 15px/1.3 var(--body);margin:16px 0 8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+p{margin:0 0 8px}
+.muted{color:var(--muted)}
+.note{font-size:13px;color:var(--muted);margin-top:8px}
+.note.warn{color:var(--amber)}
+.view{display:none}.view.active{display:block}
+.brand{font:800 13px/1 var(--display);letter-spacing:.04em;color:var(--sage);padding:14px 16px 0;max-width:560px;margin:0 auto}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px;margin:0 0 12px}
+.ph{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.ph h1,.ph h2{margin-bottom:10px}
+.link{background:none;border:0;color:var(--sage);font:600 14px var(--body);padding:4px 0;cursor:pointer}
+.hello h1{margin-bottom:2px}.hello p{text-transform:none;margin-bottom:16px}
+
+/* главное действие — этикетка-сканер */
+.cta{display:flex;gap:14px;align-items:center;width:100%;text-align:left;cursor:pointer;margin:0 0 12px;
+  background:var(--ink);color:var(--paper);border:0;border-radius:18px;padding:18px;font:inherit}
+.cta b{display:block;font:700 19px/1.2 var(--display);letter-spacing:-.01em}
+.cta small{display:block;opacity:.75;margin-top:4px;font-size:14px}
+.cta-mark{flex:none;width:52px;height:52px;border-radius:12px;background:var(--paper);display:grid;place-items:center}
+.cta-mark svg{width:30px;height:30px;fill:none;stroke:var(--ink);stroke-width:1.8;stroke-linecap:round}
+.sec-head{margin-top:24px}
+.sec-head h2{font:800 20px/1.2 var(--display)}
+.invite{border-color:var(--sage);background:var(--sage-soft)}
+
+.kcal{display:flex;align-items:baseline;gap:8px}
+.big{font:800 34px/1 var(--display);letter-spacing:-.02em}
+.bar{height:6px;border-radius:3px;background:var(--unk-soft);overflow:hidden;margin:8px 0 2px}
+.bar i{display:block;height:100%;background:var(--ink);border-radius:3px}
+.bar.sage i{background:var(--sage)}.bar.plain i{background:var(--muted)}
+.macros{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:12px}
+.macros.four{grid-template-columns:repeat(4,1fr)}
+.macros span,.quality span,.kv span{display:block;font-size:13px;color:var(--muted)}
+.macros b{font-weight:600}
+.quality{display:grid;grid-template-columns:1fr 1fr;gap:10px 12px;margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
+.c-berry{color:var(--berry)}
+.tip{margin-top:12px;padding:10px 12px;border-radius:10px;background:var(--sage-soft);font-size:14px}
+.quick{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.quick button{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 12px;font:500 14px var(--body);color:var(--ink);text-align:left;cursor:pointer}
+
+/* формы */
+label{display:block;font-size:13px;color:var(--muted);margin-bottom:10px}
+input,select,textarea{display:block;width:100%;margin-top:4px;font:16px var(--body);color:var(--ink);background:var(--paper);
+  border:1px solid var(--line);border-radius:10px;padding:10px 12px;min-height:44px}
+textarea{resize:vertical}
+input[type=checkbox],input[type=radio]{width:auto;min-height:0;display:inline;margin:0}
+input[type=date]{width:auto}
+:focus-visible{outline:2px solid var(--sage);outline-offset:2px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:0 10px}
+.grid .wide{grid-column:1/-1}
+.grid.three{grid-template-columns:repeat(3,1fr)}
+.check{display:flex;gap:8px;align-items:flex-start;color:var(--ink);font-size:14px}
+.check input{margin-top:3px}
+.checks{display:grid;grid-template-columns:1fr 1fr;gap:0 10px}
+.btn{display:block;width:100%;min-height:46px;border:0;border-radius:12px;background:var(--sage);color:#fff;font:600 15px var(--body);cursor:pointer;margin-top:6px}
+:root[data-theme="dark"] .btn{color:#0F1512}
+.btn.ghost{background:transparent;border:1px solid var(--line);color:var(--ink)}
+.btn.danger{color:var(--berry)}
+.row{display:flex;gap:8px;align-items:flex-end}
+.row label{flex:1;margin:0}
+.row .btn{width:auto;padding:0 14px;margin:0;white-space:nowrap}
+.btnrow{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0}
+#lookupMsg{font-size:14px;min-height:0}
+#reader{border-radius:12px;overflow:hidden;margin:10px 0}
+.src-note{font-size:13px;color:var(--muted)}
+details summary{cursor:pointer;color:var(--sage);font-weight:600;font-size:14px;padding:6px 0}
+.seg{display:flex;gap:6px;margin:6px 0}
+.seg label{flex:1;margin:0}
+.seg input{position:absolute;opacity:0}
+.seg span{display:block;text-align:center;padding:10px 4px;border:1px solid var(--line);border-radius:10px;color:var(--ink);font-size:14px;cursor:pointer}
+.seg input:checked+span{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.seg input:focus-visible+span{outline:2px solid var(--sage);outline-offset:2px}
+.scale-cap{display:flex;justify-content:space-between;font-size:12px;color:var(--muted)}
+
+/* список */
+.item{display:flex;gap:10px;align-items:flex-start;padding:12px 0;border-top:1px solid var(--line)}
+.item:first-child{border-top:0}
+.chk{padding:4px;margin:0}
+.chk input{width:20px;height:20px}
+.item-main{flex:1;text-align:left;background:none;border:0;padding:0;color:var(--ink);font:inherit;cursor:pointer}
+.item-main b{display:block;font-weight:600}
+.item-main small{display:block;color:var(--muted);font-size:13px}
+.chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+.chip{display:inline-block;font-size:12px;font-weight:500;line-height:1.3;padding:2px 8px;border-radius:999px;background:var(--unk-soft);color:var(--unk);white-space:nowrap}
+.chip.good{background:var(--good-soft);color:var(--good)}
+.chip.amber{background:var(--amber-soft);color:var(--amber)}
+.chip.berry{background:var(--berry-soft);color:var(--berry)}
+.chip.sage{background:var(--sage-soft);color:var(--sage)}
+.chip.plain{background:var(--unk-soft);color:var(--ink)}
+.entries{list-style:none;margin:0;padding:0}
+.entries li{display:flex;gap:10px;justify-content:space-between;align-items:flex-start;padding:10px 0;border-top:1px solid var(--line)}
+.entries li:first-child{border-top:0}
+.entries b{font-weight:600;display:block}
+.entries small{color:var(--muted);font-size:13px}
+.x{flex:none;width:36px;height:36px;border-radius:10px;border:1px solid var(--line);background:none;color:var(--muted);font-size:20px;line-height:1;cursor:pointer}
+.addrow{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap}
+.addrow select{flex:1 1 100%}
+.addrow label{flex:1;margin:0}
+.addrow .btn{flex:1;margin:0}
+
+/* шторка с анализом — оформлена как этикетка */
+.sheet{position:fixed;inset:0;z-index:20;background:rgba(10,14,12,.45);display:flex;align-items:flex-end;justify-content:center}
+.sheet[hidden]{display:none}
+.sheet-panel{position:relative;width:100%;max-width:560px;max-height:92vh;overflow:auto;background:var(--paper);border-radius:20px 20px 0 0;
+  padding:20px 16px calc(24px + env(safe-area-inset-bottom,0));animation:up .22s ease-out}
+@keyframes up{from{transform:translateY(24px);opacity:.6}to{transform:none;opacity:1}}
+@media (prefers-reduced-motion:reduce){.sheet-panel{animation:none}}
+#sheetClose{position:sticky;top:0;float:right;width:36px;height:36px;border-radius:50%;border:0;background:var(--surface);color:var(--ink);font-size:20px;cursor:pointer;z-index:2}
+.label{background:var(--surface);border:2px solid var(--ink);border-radius:6px;padding:14px;margin-bottom:12px}
+.label header{border-bottom:8px solid var(--ink);padding-bottom:10px;margin-bottom:10px}
+.label h2{font:800 22px/1.15 var(--display);letter-spacing:-.01em;margin:0 36px 4px 0}
+.label section{border-top:1px solid var(--ink);padding-top:2px;margin-top:12px}
+.label section h3{margin-top:10px}
+.src{font-size:13px;color:var(--muted);margin:0}
+.verdict{font-weight:600;padding:10px 12px;border-radius:8px;background:var(--unk-soft)}
+.verdict.good{background:var(--good-soft);color:var(--good)}
+.verdict.amber{background:var(--amber-soft);color:var(--amber)}
+.factors{list-style:none;margin:0;padding:0}
+.f{display:flex;gap:10px;padding:8px 0}
+.f .dot{flex:none;width:12px;font-size:12px;line-height:1.8;color:var(--muted)}
+.f.strong .dot,.f.berry .dot{color:var(--berry)}.f.watch .dot,.f.amber .dot{color:var(--amber)}.f.good .dot{color:var(--good)}
+.f b{display:block;font-weight:600}
+.f p{margin:2px 0 0;font-size:14px}
+.nt{width:100%;border-collapse:collapse;font-size:14px}
+.nt th{text-align:left;font-weight:500;padding:7px 0;border-bottom:1px solid var(--line)}
+.nt td{padding:7px 0 7px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+.nt td:nth-child(2){font-weight:600;white-space:nowrap;text-align:right}
+.nt td:last-child{text-align:right}
+.nt small{display:block;color:var(--muted);font-size:12px}
+.ing{margin:0;padding-left:22px;font-size:14px}
+.ing li{padding:4px 0}
+.ing li span:first-child{margin-right:6px}
+.ing .chip{margin:2px 4px 0 0}
+.kv{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid var(--line)}
+.kv span{font-size:14px}.kv b{text-align:right;font-weight:600;font-size:14px}
+.alt{display:block;width:100%;text-align:left;background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:6px 0;color:var(--ink);font:inherit;cursor:pointer}
+.alt b{display:block}.alt small{color:var(--muted)}
+.actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+.scroll-x{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.cmp{border-collapse:collapse;font-size:14px;min-width:100%}
+.cmp th,.cmp td{padding:8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top;min-width:110px}
+.cmp thead th{font-weight:600}
+.cmp .chip{white-space:normal}
+.cmp tbody th{font-weight:500;color:var(--muted);min-width:120px}
+.dump{min-height:50vh;font:12px/1.4 ui-monospace,monospace}
+.conn{list-style:none;padding:0;margin:0;font-size:14px}
+.conn li{padding:8px 0;border-top:1px solid var(--line)}
+.conn li:first-child{border-top:0}
+
+/* график кожи */
+.chart{width:100%;min-width:286px;height:auto;display:block}
+.chart .s1{fill:var(--berry)}.chart .s2{fill:var(--berry);opacity:.65}.chart .s3{fill:var(--amber)}.chart .s4{fill:var(--sage);opacity:.7}.chart .s5{fill:var(--sage)}
+.chart .empty{fill:var(--line)}
+.dot-sugar{fill:var(--berry)}.dot-dairy{fill:var(--sage)}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12px;color:var(--muted);margin-top:8px}
+.legend i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;vertical-align:middle}
+.lg-bar{background:var(--sage);border-radius:2px!important}.lg-sugar{background:var(--berry)}.lg-dairy{background:var(--sage);opacity:.6}
+
+/* нижняя навигация */
+.tabbar{position:fixed;left:0;right:0;bottom:0;z-index:10;display:grid;grid-template-columns:repeat(3,1fr);
+  background:var(--surface);border-top:1px solid var(--line);padding:6px 4px calc(6px + env(safe-area-inset-bottom,0))}
+.tabbar button{background:none;border:0;color:var(--muted);font:500 11px var(--body);display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 0;cursor:pointer}
+.tabbar svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.tabbar button[aria-current="page"]{color:var(--ink)}
+.tabbar button[data-v="scan"] svg{background:var(--ink);stroke:var(--paper);border-radius:10px;padding:5px;width:36px;height:36px;margin-top:-10px}
+#toast{position:fixed;left:50%;bottom:calc(86px + env(safe-area-inset-bottom,0));transform:translate(-50%,20px);opacity:0;z-index:30;
+  background:var(--ink);color:var(--paper);padding:10px 16px;border-radius:12px;font-size:14px;max-width:90vw;transition:.2s;pointer-events:none}
+#toast.show{opacity:1;transform:translate(-50%,0)}
+.cfm{position:fixed;inset:0;z-index:40;background:rgba(10,14,12,.5);display:flex;align-items:center;justify-content:center;padding:20px}
+.cfm-box{background:var(--surface);border-radius:16px;padding:18px;max-width:360px;width:100%}
+.cfm-box p{margin:0 0 14px;font-weight:500}
+.cfm-btns{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.cfm-btns .btn{margin:0}
+.btn.danger-fill{background:var(--berry);color:#fff}
+@media (max-width:360px){.macros.four{grid-template-columns:1fr 1fr}.checks{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="brand">NUTRIQ</div>
+<main>
+  <section id="v-home" class="view active"><div id="homeBody"></div></section>
+
+  <section id="v-scan" class="view">
+    <h1>Добавить еду</h1>
+    <form id="scanForm" class="panel" novalidate>
+      <h2>Найти по штрихкоду</h2>
+      <div class="row"><label>Штрихкод<input id="f-barcode" inputmode="numeric" autocomplete="off" placeholder="4600000000000"></label><button type="button" class="btn" id="lookupBtn">Найти</button></div>
+      <div class="btnrow"><button type="button" class="btn ghost" id="camBtn">Сканировать камерой</button><button type="button" class="btn ghost" id="clearBtn">Очистить форму</button></div>
+      <div id="reader" hidden></div>
+      <p id="lookupMsg" class="muted" aria-live="polite"></p>
+
+      <h2 style="margin-top:14px">Данные с упаковки</h2>
+      <label>Название<input id="f-name" maxlength="120" required></label>
+      <div class="grid"><label>Бренд<input id="f-brand" maxlength="60"></label><label>Категория<select id="f-cat"></select></label></div>
+      <label>Состав — перепишите или вставьте как на упаковке<textarea id="f-ing" rows="4" placeholder="молоко нормализованное, сахар, крахмал кукурузный, закваска…"></textarea></label>
+      <p class="muted" style="font-size:14px">Пищевая ценность на 100 г (для напитков — на 100 мл). Пустое поле = нет данных, не ноль.</p>
+      <div class="grid three">
+        <label>Ккал<input id="f-kcal" inputmode="decimal"></label>
+        <label>Белки<input id="f-protein" inputmode="decimal"></label>
+        <label>Жиры<input id="f-fat" inputmode="decimal"></label>
+        <label>Насыщ. жиры<input id="f-satfat" inputmode="decimal"></label>
+        <label>Углеводы<input id="f-carbs" inputmode="decimal"></label>
+        <label>Сахара<input id="f-sugars" inputmode="decimal"></label>
+        <label>Клетчатка<input id="f-fiber" inputmode="decimal"></label>
+        <label>Соль<input id="f-salt" inputmode="decimal"></label>
+      </div>
+      <details><summary>Цена и магазин</summary>
+        <div class="grid three"><label>Цена, ₽<input id="f-price" inputmode="decimal"></label><label>Вес, г/мл<input id="f-pack" inputmode="decimal"></label><label>Дата цены<input id="f-pricedate" type="date"></label></div>
+      </details>
+      <p id="srcNote" class="src-note"></p>
+      <button class="btn" id="saveBtn">Проанализировать</button>
+    </form>
+
+    <section class="panel" id="library">
+      <div class="ph"><h2>Мои продукты</h2></div>
+      <label>Поиск<input id="libSearch" type="search" placeholder="Название или бренд"></label>
+      <div id="libList"></div>
+      <button class="btn" id="cmpBtn" hidden>Сравнить</button>
+      <p class="note">Отметьте 2–3 продукта одной категории, чтобы сравнить их.</p>
+    </section>
+  </section>
+
+  <section id="v-profile" class="view"><div id="profileBody"></div></section>
+</main>
+
+<nav class="tabbar" aria-label="Разделы">
+  <button data-v="home" aria-current="page"><svg viewBox="0 0 24 24"><path d="M4 11l8-7 8 7v8a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1z"/></svg>Сегодня</button>
+  <button data-v="scan"><svg viewBox="0 0 24 24"><path d="M4 7V5a1 1 0 0 1 1-1h2M17 4h2a1 1 0 0 1 1 1v2M20 17v2a1 1 0 0 1-1 1h-2M7 20H5a1 1 0 0 1-1-1v-2M8 9v6M11 9v6M14 9v6M16.5 9v6"/></svg>Добавить еду</button>
+  <button data-v="profile"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/></svg>Профиль</button>
+</nav>
+
+<div id="sheet" class="sheet" hidden role="dialog" aria-modal="true"><div class="sheet-panel"><button id="sheetClose" aria-label="Закрыть">×</button><div id="sheetBody"></div></div></div>
+<div id="toast" role="status"></div>
+
+<script>
+/* NUTRIQ — движок анализа состава. Детерминированные правила, без AI и без выдуманных значений. */
+const CATS = {
+  dairy: 'Молочные и кисломолочные', cheese: 'Сыры', meat: 'Мясо, рыба, яйца',
+  grain: 'Хлеб, крупы, макароны', breakfast: 'Завтраки, мюсли, батончики',
+  sweets: 'Сладости и снеки', drink: 'Напитки', ready: 'Готовая еда и соусы',
+  plant: 'Овощи, фрукты, бобовые', fatnut: 'Масла, орехи, семена',
+  sport: 'Спортпит и протеин', other: 'Другое'
+};
+const GOALS = {
+  cut: 'Сушка (снижение жира)', bulk: 'Набор массы', recomp: 'Рекомпозиция',
+  maintain: 'Поддержание формы', perf: 'Силовые показатели'
+};
+const NUTR = {
+  kcal: 'Калорийность', protein: 'Белки', fat: 'Жиры', satfat: 'Насыщенные жиры',
+  carbs: 'Углеводы', sugars: 'Сахара', fiber: 'Клетчатка', salt: 'Соль'
+};
+/* Пороги «светофора» UK FSA на 100 г / 100 мл: [низкое ≤, высокое >] */
+const FSA = {
+  food: { sugars: [5, 22.5], fat: [3, 17.5], satfat: [1.5, 5], salt: [0.3, 1.5] },
+  drink: { sugars: [2.5, 11.25], fat: [1.5, 8.75], satfat: [0.75, 2.5], salt: [0.3, 0.75] }
+};
+/* Где высокое значение ожидаемо для категории и не считается недостатком само по себе */
+const EXPECTED = { fatnut: ['fat', 'satfat'], cheese: ['fat', 'satfat', 'salt'] };
+/* Пороги заявлений ЕС: клетчатка г/100 г, белок % энергии */
+const FIBER_SOURCE = 3, FIBER_HIGH = 6, PROT_SOURCE_PCT = 12, PROT_HIGH_PCT = 20;
+const PROT_DENSE_PER_100KCAL = 8;
+const PRICE_STALE_DAYS = 30;
+
+const NO_SUGAR_PHRASE = /без\s+(добавлени[а-я]*\s+)?сахар|не\s+содержит\s+сахар/;
+const SUGAR_RULES = [
+  [/сахар(?!ин|озаменит|н[а-я]*\s+колер)/, 'сахар'],
+  [/сироп/, 'сироп'],
+  [/патока/, 'патока'],
+  [/декстроз/, 'декстроза'],
+  [/(^|[^а-я])глюкоз/, 'глюкоза'],
+  [/(^|[^а-я])фруктоз/, 'фруктоза'],
+  [/мальтодекстрин/, 'мальтодекстрин'],
+  [/(^|[^а-я])мальтоз/, 'мальтоза'],
+  [/(^|[^а-я])мед([^а-яь]|$)/, 'мёд'],
+  [/сок[а-я]*\s+концентр|концентр[а-я]*\s+([а-я-]+\s+){0,3}сок|сок[а-я]*\s+восстановл/, 'концентрированный сок'],
+  [/карамел(?![а-я]*\s+колер)/, 'карамель'],
+  [/экстракт[а-я]*\s+солод|солодов[а-я]*\s+экстракт/, 'солодовый экстракт']
+];
+const SWEET_RE = /сукралоз|стеви|эритрит|аспартам|ацесульфам|сорбит|мальтит|ксилит|цикламат|сахарин|изомальт|(^|[^а-я])е\s?-?(955|960|968|951|950|420|965|967|952|954|953)/;
+const PLANT_MILK = /(кокосов|миндальн|овсян|соев|рисов)[а-я]*\s+молок/;
+const DAIRY_RE = /молок|молочн(?!окисл|[а-я]*\s+кислот)|сливк|сливочн|сыворот|казеин|лактоз|творог|творож|(^|[^а-я])сыр(?!ь|ой|ая|ое|ые|ого|ую)|кефир|йогурт|ряженк|сметан|сгущ|пахт/;
+const WHEY_RE = /сыворот|whey/;
+const ZMZH_RE = /заменител[а-я]*\s+молочного\s+жира|змж/;
+const HYDRO_RE = /гидрогенизир|маргарин|кулинарн[а-я]*\s+жир/;
+const PALM_RE = /пальмов|пальмоядров/;
+const REFINED_RE = /мука\s+пшеничн|пшеничн[а-я]*\s+мука|крахмал|рисов[а-я]*\s+мук|кукурузн[а-я]*\s+мук|манн[а-я]*\s+круп|(^|[^а-я])рис\s+белый|белый\s+рис/;
+const WHOLE_RE = /цельнозерн|отруб|овсян|гречн|гречк|киноа|булгур|полб|бур[а-я]*\s+рис|ячнев|перлов|обдирн/;
+const ECODE_RE = /(^|[^а-я])е\s?-?(\d{3,4}[а-яa-z]?)/g;
+const ALLERGENS = {
+  gluten: { label: 'Злаки с глютеном', re: /пшени|(^|[^а-я])рож|ржан|ячмен|ячн|овес|овс|спельт|полб|глютен|клейковин|манн/ },
+  milk: { label: 'Молоко и лактоза', re: DAIRY_RE },
+  egg: { label: 'Яйца', re: /(^|[^а-я])яйц|яичн|меланж/ },
+  soy: { label: 'Соя', re: /соев|(^|[^а-я])со[яию]([^а-я]|$)/ },
+  peanut: { label: 'Арахис', re: /арахис/ },
+  nuts: { label: 'Орехи', re: /фундук|миндал|грецк|кешью|фисташ|пекан|макадам|бразильск[а-я]*\s+орех|кедров|лесн[а-я]*\s+орех/ },
+  sesame: { label: 'Кунжут', re: /кунжут/ },
+  fish: { label: 'Рыба', re: /(^|[^а-я])рыб|лосос|тунц|тунец|треск|анчоус|сельд|скумбри|минта|горбуш|форел/ },
+  crust: { label: 'Ракообразные', re: /креветк|краб|омар|лангуст/ },
+  mollusc: { label: 'Моллюски', re: /кальмар|миди|осьминог|гребешк|устриц/ },
+  mustard: { label: 'Горчица', re: /горчиц/ },
+  celery: { label: 'Сельдерей', re: /сельдере/ },
+  sulfites: { label: 'Сульфиты', re: /сульфит|диоксид\s+серы|сернист|(^|[^а-я])е\s?-?22[0-8]/ },
+  lupin: { label: 'Люпин', re: /люпин/ }
+};
+
+function normText(s) {
+  return String(s || '').toLowerCase().replace(/ё/g, 'е')
+    .replace(/(^|[^a-z])e(?=\s?-?\d{3})/g, '$1е');
+}
+
+function splitIngredients(text) {
+  const t = normText(text).replace(/^\s*состав\s*:?\s*/, '').replace(/\s+/g, ' ');
+  const out = []; let depth = 0, cur = '';
+  for (let i = 0; i < t.length; i++) {
+    const ch = t[i];
+    if (ch === '(' || ch === '[') depth++;
+    else if (ch === ')' || ch === ']') depth = Math.max(0, depth - 1);
+    const decimal = ch === ',' && /\d/.test(t[i - 1] || '') && /\d/.test(t[i + 1] || '');
+    if ((ch === ',' || ch === ';') && depth === 0 && !decimal) { out.push(cur); cur = ''; }
+    else cur += ch;
+  }
+  out.push(cur);
+  return out.map(x => x.trim().replace(/[.\s]+$/, '').trim()).filter(Boolean);
+}
+
+function levelOf(v, pair) {
+  if (v == null) return 'unk';
+  if (v <= pair[0]) return 'low';
+  if (v > pair[1]) return 'high';
+  return 'mid';
+}
+
+function daysSince(dateStr, now) {
+  if (!dateStr) return null;
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const t = new Date(y, m - 1, d).getTime();
+  return Math.floor(((now || Date.now()) - t) / 86400000);
+}
+
+function analyze(p, profile, now) {
+  profile = profile || {};
+  const n = p.n || {};
+  const drink = p.category === 'drink';
+  const th = drink ? FSA.drink : FSA.food;
+  const expected = EXPECTED[p.category] || [];
+  const unit = drink ? '100 мл' : '100 г';
+  const fmt1 = v => String(Math.round(v * 10) / 10).replace('.', ',');
+
+  /* --- Состав --- */
+  const items = splitIngredients(p.ingredients);
+  const hasIng = items.length > 0;
+  const added = [], sweet = [], ecodes = new Set(), allergens = new Set();
+  let dairy = false, whey = false, zmzh = false, hydro = false, palm = false, refinedTop = false, whole = false;
+
+  const tagged = items.map((it, i) => {
+    const tags = [];
+    if (!NO_SUGAR_PHRASE.test(it)) {
+      for (const [re, label] of SUGAR_RULES) {
+        if (re.test(it)) { added.push({ name: label, pos: i }); tags.push(['добавленный сахар', 'berry']); break; }
+      }
+    }
+    if (SWEET_RE.test(it)) { sweet.push(it); tags.push(['подсластитель', 'plain']); }
+    if (DAIRY_RE.test(it) && !PLANT_MILK.test(it)) { dairy = true; tags.push(['молочное', 'sage']); }
+    if (WHEY_RE.test(it)) { whey = true; tags.push(['сыворотка', 'amber']); }
+    if (ZMZH_RE.test(it)) { zmzh = true; tags.push(['ЗМЖ', 'amber']); }
+    if (HYDRO_RE.test(it)) { hydro = true; tags.push(['гидрогенизированный жир', 'amber']); }
+    if (PALM_RE.test(it)) { palm = true; tags.push(['пальмовое масло', 'plain']); }
+    if (i <= 2 && REFINED_RE.test(it) && !/цельнозерн/.test(it)) { refinedTop = true; tags.push(['рафинированная мука или крахмал', 'plain']); }
+    if (WHOLE_RE.test(it)) { whole = true; tags.push(['цельное зерно', 'good']); }
+    let m; ECODE_RE.lastIndex = 0;
+    while ((m = ECODE_RE.exec(it))) ecodes.add('Е' + m[2].toUpperCase());
+    for (const [k, a] of Object.entries(ALLERGENS)) {
+      if (a.re.test(it) && !(k === 'milk' && PLANT_MILK.test(it))) allergens.add(k);
+    }
+    return { text: it, tags };
+  });
+
+  /* --- Недостающие данные --- */
+  const missing = [];
+  if (!hasIng) missing.push('Состав');
+  for (const k of Object.keys(NUTR)) if (n[k] == null) missing.push(NUTR[k]);
+
+  /* --- Пищевая ценность --- */
+  const rows = []; let reds = 0;
+  if (n.protein != null) {
+    const pct = n.kcal ? n.protein * 4 / n.kcal * 100 : null;
+    let label = 'Немного', tone = 'plain';
+    if (pct != null ? pct >= PROT_HIGH_PCT : n.protein >= 10) { label = 'Много'; tone = 'good'; }
+    else if (pct != null && pct >= PROT_SOURCE_PCT) { label = 'Источник белка'; tone = 'good'; }
+    rows.push({ key: 'protein', name: 'Белки', value: n.protein, label, tone,
+      hint: pct != null ? `${Math.round(pct)}% калорий из белка` : '' });
+  } else rows.push({ key: 'protein', name: 'Белки', value: null, label: 'Нет данных', tone: 'unk' });
+  if (n.fiber != null) {
+    let label = 'Мало', tone = 'plain';
+    if (n.fiber >= FIBER_HIGH) { label = 'Много'; tone = 'good'; }
+    else if (n.fiber >= FIBER_SOURCE) { label = 'Источник'; tone = 'good'; }
+    const noFiberCat = ['dairy', 'cheese', 'meat', 'drink', 'sport'].includes(p.category);
+    rows.push({ key: 'fiber', name: 'Клетчатка', value: n.fiber, label, tone, hint: noFiberCat && tone === 'plain' ? 'для этой категории нормально' : '' });
+  } else rows.push({ key: 'fiber', name: 'Клетчатка', value: null, label: 'Нет данных', tone: 'unk' });
+  for (const k of ['sugars', 'fat', 'satfat', 'salt']) {
+    const l = levelOf(n[k], th[k]);
+    let label = { low: 'Низкое', mid: 'Среднее', high: 'Высокое', unk: 'Нет данных' }[l];
+    let tone = { low: 'good', mid: 'plain', high: 'amber', unk: 'unk' }[l];
+    let hint = '';
+    if (l === 'high' && expected.includes(k)) { tone = 'plain'; hint = 'ожидаемо для категории'; }
+    else if (l === 'high') reds++;
+    rows.push({ key: k, name: NUTR[k], value: n[k], label, tone, hint });
+  }
+
+  /* --- Кожа --- */
+  const sf = [];
+  const topSugar = added.some(a => a.pos <= 2);
+  if (added.length) {
+    const names = [...new Set(added.map(a => a.name))].join(', ');
+    sf.push({ tone: topSugar ? 'strong' : 'watch',
+      title: topSugar ? 'Сахар среди первых ингредиентов' : 'В составе есть добавленный сахар',
+      text: `Найдено: ${names}. ${topSugar ? 'Ингредиенты перечисляют по убыванию доли, так что сахара здесь много.' : 'Он не в начале списка, поэтому его доля, скорее всего, небольшая.'} Точное количество добавленного сахара на российских этикетках обычно не указывают, поэтому мы его не вычисляем.` });
+  } else if (hasIng) {
+    sf.push({ tone: 'good', title: 'Добавленного сахара в составе нет',
+      text: 'Проверили сахар, сиропы, патоку, декстрозу, мальтодекстрин, мёд и концентрированные соки.' });
+  }
+  if (n.sugars != null) {
+    if (drink && n.sugars > th.sugars[0] && (added.length || !hasIng)) {
+      sf.push({ tone: 'strong', title: 'Сладкий напиток',
+        text: `${fmt1(n.sugars)} г сахаров на 100 мл. Сладкие напитки — одна из категорий, для которых связь с акне в исследованиях находили чаще всего.` });
+    } else if (n.sugars > th.sugars[1]) {
+      sf.push({ tone: 'strong', title: 'Много сахаров',
+        text: `${fmt1(n.sugars)} г на ${unit}. Это высокий уровень по шкале UK FSA.${!added.length && hasIng ? ' Добавленного сахара в составе нет, так что это, вероятно, сахара из фруктов, сухофруктов или молока.' : ''}` });
+    } else if (n.sugars > th.sugars[0] && !added.length && hasIng) {
+      sf.push({ tone: 'info', title: 'Сахара, скорее всего, естественные',
+        text: `${fmt1(n.sugars)} г на ${unit}, но добавленного сахара в составе нет. ${dairy ? 'В молочных продуктах это в основном лактоза.' : 'Обычно это сахара фруктов или молока.'} Общие сахара и добавленный сахар — не одно и то же.` });
+    } else if (n.sugars <= th.sugars[0]) {
+      sf.push({ tone: 'good', title: 'Мало сахаров', text: `${fmt1(n.sugars)} г на ${unit}.` });
+    }
+  }
+  if (n.carbs != null && n.carbs >= 50 && (n.fiber == null || n.fiber < FIBER_SOURCE) && (refinedTop || topSugar)) {
+    sf.push({ tone: 'watch', title: 'Быстрые углеводы и мало клетчатки',
+      text: 'Похоже на продукт с высокой гликемической нагрузкой — этот фактор в исследованиях связывают с акне. Точный гликемический индекс по этикетке определить нельзя: многое зависит от порции и того, с чем вы его едите.' });
+  }
+  if (whole || (n.fiber != null && n.fiber >= FIBER_HIGH)) {
+    sf.push({ tone: 'good', title: whole ? 'Есть цельное зерно или клетчатка' : 'Много клетчатки',
+      text: 'Клетчатка замедляет усвоение углеводов и снижает гликемическую нагрузку приёма пищи.' });
+  }
+  if (whey) {
+    sf.push({ tone: 'watch', title: 'Сывороточный белок',
+      text: 'Сыворотка заметно повышает инсулин. Описаны случаи акне у людей, принимающих сывороточный протеин. Если замечаете связь, попробуйте говяжий, яичный или растительный протеин и понаблюдайте за кожей несколько недель.' });
+  } else if (dairy) {
+    sf.push({ tone: profile.dairyWatch ? 'watch' : 'info', title: 'Молочный продукт',
+      text: 'Связь с акне чаще описывали для молока, особенно обезжиренного. По йогуртам и сырам данные слабее и противоречивее. Это повод понаблюдать за собой в дневнике кожи, а не повод исключать молочное.' });
+  }
+  if (sweet.length) {
+    sf.push({ tone: 'info', title: 'Подсластители',
+      text: 'Они не добавляют сахар. Надёжных данных о связи подсластителей с акне нет. Полиолы (сорбит, мальтит, эритрит) в больших количествах могут вызывать дискомфорт в животе.' });
+  }
+  let skinLevel;
+  if (!hasIng && n.sugars == null) skinLevel = 'unknown';
+  else if (sf.some(f => f.tone === 'strong')) skinLevel = 'strong';
+  else if (sf.some(f => f.tone === 'watch')) skinLevel = 'watch';
+  else skinLevel = 'low';
+  const SKIN_LABEL = { strong: 'Есть выраженные факторы', watch: 'Есть факторы для наблюдения', low: 'Заметных факторов не найдено', unknown: 'Недостаточно данных' };
+
+  /* --- Состав: заметки --- */
+  const notes = [];
+  if (zmzh) notes.push({ tone: 'amber', text: 'Заменитель молочного жира (ЗМЖ): часть молочного жира заменена растительными жирами. Это не опасно, но такой продукт — не полностью молочный.' });
+  if (hydro) notes.push({ tone: 'amber', text: 'Гидрогенизированный жир или маргарин: может содержать трансжиры, их стоит ограничивать.' });
+  if (palm) notes.push({ tone: 'plain', text: 'Пальмовое масло: богато насыщенными жирами. Оценивайте его вместе с общим количеством насыщенных жиров.' });
+  if (ecodes.size) notes.push({ tone: 'plain', text: `Пищевые добавки: ${[...ecodes].join(', ')}. Само наличие Е-кодов не делает продукт вредным: у каждой добавки своя функция и разрешённая доза.` });
+
+  /* --- Под цель --- */
+  const fit = [];
+  const userAllergyHits = (profile.allergies || []).filter(a => allergens.has(a));
+  for (const a of userAllergyHits) fit.push({ tone: 'strong', text: `Содержит ваш аллерген: ${ALLERGENS[a].label.toLowerCase()}. Проверьте упаковку.` });
+  if (n.kcal && n.protein != null) {
+    const p100 = n.protein / n.kcal * 100;
+    const goal = profile.goal || 'maintain';
+    if (p100 >= PROT_DENSE_PER_100KCAL) fit.push({ tone: 'good', text: `Много белка на калорию: ${fmt1(p100)} г на 100 ккал.${goal === 'cut' ? ' Удобно на сушке.' : ''}` });
+    if (goal === 'cut' && n.kcal >= 350 && p100 < 3) fit.push({ tone: 'watch', text: `Калорийный (${Math.round(n.kcal)} ккал на ${unit}) при небольшом белке. На сушке держите порцию под контролем.` });
+    if (goal === 'bulk' && n.kcal >= 300 && n.protein >= 10) fit.push({ tone: 'good', text: 'Плотный по энергии и белку — помогает добрать калории на массе.' });
+  }
+
+  /* --- Цена --- */
+  let value = null;
+  if (p.price > 0 && p.packG > 0) {
+    value = { per100: p.price / p.packG * 100, per10p: null, age: daysSince(p.priceDate, now) };
+    if (n.protein != null && n.protein >= 5) value.per10p = p.price / (p.packG / 100 * n.protein) * 10;
+    value.stale = value.age == null || value.age > PRICE_STALE_DAYS;
+  }
+
+  /* --- Итог --- */
+  let verdict;
+  if (!hasIng && (n.sugars == null || n.protein == null)) verdict = { key: 'unknown', label: 'Недостаточно данных для уверенной оценки' };
+  else if (skinLevel === 'strong' || zmzh || hydro || userAllergyHits.length || reds >= 2) verdict = { key: 'issues', label: 'Есть особенности, на которые стоит обратить внимание' };
+  else verdict = { key: 'good', label: 'Хорошо подходит по выбранным критериям' };
+
+  return {
+    verdict, missing, rows, unit,
+    skin: { level: skinLevel, label: SKIN_LABEL[skinLevel], factors: sf },
+    comp: { items: tagged, notes, allergens: [...allergens].map(k => ALLERGENS[k].label), ecodes: [...ecodes] },
+    flags: { addedSugar: added.length > 0, topSugar, dairy, whey },
+    fit, value
+  };
+}
+
+const SKIN_RANK = { low: 0, watch: 1, strong: 2, unknown: 9 };
+
+if (typeof module !== 'undefined') module.exports = { analyze, splitIngredients, normText, CATS, GOALS, NUTR, SKIN_RANK, ALLERGENS };
+
+</script>
+<script>
+/* NUTRIQ — интерфейс Telegram Mini App */
+const tg = window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData !== undefined ? window.Telegram.WebApp : null;
+const inTelegram = !!(tg && tg.initData);
+if (tg) { try { tg.ready(); tg.expand(); } catch (e) {} }
+
+const KEY = 'nutriq.v1';
+const blank = () => ({ profile: null, products: [], diary: [], skin: [] });
+let S = load();
+function load() {
+  try { const raw = localStorage.getItem(KEY); return raw ? Object.assign(blank(), JSON.parse(raw)) : blank(); }
+  catch (e) { return blank(); }
+}
+function save() {
+  try { localStorage.setItem(KEY, JSON.stringify(S)); return true; }
+  catch (e) { toast('Не удалось сохранить данные на устройстве'); return false; }
+}
+
+/* ---------- утилиты ---------- */
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const num = v => { if (v == null || String(v).trim() === '') return null; const x = parseFloat(String(v).replace(',', '.')); return isFinite(x) ? x : null; };
+const fmt = (v, d = 1) => v == null ? '—' : Number(v).toLocaleString('ru-RU', { maximumFractionDigits: d });
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const ymd = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const todayStr = () => ymd(new Date());
+const addDays = (s, k) => { const [y, m, d] = s.split('-').map(Number); return ymd(new Date(y, m - 1, d + k)); };
+const ruDate = s => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' }); };
+
+function toast(msg) {
+  const t = $('#toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), 2600);
+}
+function haptic(type) { try { if (inTelegram) tg.HapticFeedback.notificationOccurred(type || 'success'); } catch (e) {} }
+function confirmAsk(msg, okLabel) {
+  return new Promise(res => {
+    if (inTelegram && tg.showConfirm) { try { tg.showConfirm(msg, ok => res(!!ok)); return; } catch (e) {} }
+    const wrap = document.createElement('div');
+    wrap.className = 'cfm'; wrap.setAttribute('role', 'alertdialog'); wrap.setAttribute('aria-modal', 'true');
+    wrap.innerHTML = `<div class="cfm-box"><p>${esc(msg)}</p><div class="cfm-btns"><button class="btn ghost" data-a="0">Отмена</button><button class="btn danger-fill" data-a="1">${esc(okLabel || 'Удалить')}</button></div></div>`;
+    const done = v => { wrap.remove(); res(v); };
+    wrap.addEventListener('click', e => { const b = e.target.closest('[data-a]'); if (b) done(b.dataset.a === '1'); else if (e.target === wrap) done(false); });
+    document.body.appendChild(wrap);
+    wrap.querySelector('[data-a="1"]').focus();
+  });
+}
+function applyTheme() {
+  const dark = inTelegram && tg.colorScheme ? tg.colorScheme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+  document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+  if (inTelegram) { try { const c = dark ? '#121614' : '#F2F5F1'; tg.setHeaderColor(c); tg.setBackgroundColor(c); } catch (e) {} }
+}
+applyTheme();
+if (inTelegram) tg.onEvent('themeChanged', applyTheme);
+else matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme);
+
+/* ---------- расчёты профиля ---------- */
+const ACT = { 1.2: 'Сидячий образ жизни, без тренировок', 1.375: '1–3 тренировки в неделю', 1.55: '3–5 тренировок в неделю', 1.725: '6–7 тренировок или физическая работа' };
+const GOAL_ADJ = { cut: -0.15, bulk: 0.10, recomp: -0.05, maintain: 0, perf: 0 };
+const PROT_PER_KG = { cut: 2.0, bulk: 1.8, recomp: 2.0, maintain: 1.6, perf: 1.8 };
+function targets() {
+  const p = S.profile; if (!p) return null;
+  const { age, height, weight } = p;
+  let t = null;
+  if (age && height && weight) {
+    const sexAdj = p.sex === 'm' ? 5 : p.sex === 'f' ? -161 : -78;
+    const bmr = 10 * weight + 6.25 * height - 5 * age + sexAdj;
+    const tdee = bmr * (p.activity || 1.375);
+    const kcal = Math.round(tdee * (1 + (GOAL_ADJ[p.goal] || 0)) / 50) * 50;
+    const protein = Math.round(weight * (PROT_PER_KG[p.goal] || 1.6));
+    const fat = Math.round(weight * 0.9);
+    const carbs = Math.max(0, Math.round((kcal - protein * 4 - fat * 9) / 4));
+    t = { bmr: Math.round(bmr), tdee: Math.round(tdee), kcal, protein, fat, carbs, fiber: Math.round(kcal / 1000 * 14), sexUnknown: !p.sex };
+  }
+  if (p.manualKcal) { t = t || { protein: null, fat: null, carbs: null }; t.kcal = p.manualKcal; t.fiber = Math.round(p.manualKcal / 1000 * 14); t.manual = true; }
+  if (p.manualProtein) { t = t || {}; t.protein = p.manualProtein; t.manual = true; }
+  return t;
+}
+
+/* ---------- дневник ---------- */
+function dayEntries(date) { return S.diary.filter(e => e.date === date); }
+function dayTotals(date) {
+  const list = dayEntries(date);
+  const t = { kcal: 0, p: 0, f: 0, c: 0, sug: 0, fib: 0, count: list.length, sugarItems: 0, dairyItems: 0, incomplete: 0, fibKnown: 0 };
+  for (const e of list) {
+    const n = e.n || {};
+    t.kcal += n.kcal || 0; t.p += n.p || 0; t.f += n.f || 0; t.c += n.c || 0; t.sug += n.sug || 0;
+    if (n.fib != null) { t.fib += n.fib; t.fibKnown++; }
+    if (e.flags && e.flags.addedSugar) t.sugarItems++;
+    if (e.flags && e.flags.dairy) t.dairyItems++;
+    if (n.kcal == null || n.p == null) t.incomplete++;
+  }
+  return t;
+}
+function entryFromProduct(p, grams, date) {
+  const k = grams / 100, n = p.n || {};
+  const m = v => v == null ? null : Math.round(v * k * 10) / 10;
+  const a = analyze(p, S.profile);
+  return { id: uid(), date, name: p.name, productId: p.id, grams,
+    n: { kcal: m(n.kcal), p: m(n.protein), f: m(n.fat), c: m(n.carbs), sug: m(n.sugars), fib: m(n.fiber) },
+    flags: { addedSugar: a.flags.addedSugar, dairy: a.flags.dairy } };
+}
+
+/* ---------- навигация ---------- */
+let current = 'home';
+function go(v) {
+  current = v;
+  document.querySelectorAll('.view').forEach(el => el.classList.toggle('active', el.id === 'v-' + v));
+  document.querySelectorAll('.tabbar button').forEach(b => b.setAttribute('aria-current', b.dataset.v === v ? 'page' : 'false'));
+  ({ home: renderHome, scan: renderLibrary, profile: renderProfile })[v]();
+  window.scrollTo(0, 0);
+}
+document.querySelector('.tabbar').addEventListener('click', e => { const b = e.target.closest('button[data-v]'); if (b) go(b.dataset.v); });
+document.addEventListener('click', e => { const g = e.target.closest('[data-go]'); if (g) { go(g.dataset.go); if (g.dataset.focus) setTimeout(() => { const el = $(g.dataset.focus); if (el) { el.scrollIntoView({ block: 'start' }); } }, 50); } });
+
+/* ---------- ГЛАВНАЯ ---------- */
+function bar(val, max, cls) {
+  const pct = max ? Math.min(100, Math.round(val / max * 100)) : 0;
+  return `<div class="bar ${cls || ''}"><i style="width:${pct}%"></i></div>`;
+}
+function renderHome() {
+  const name = inTelegram && tg.initDataUnsafe && tg.initDataUnsafe.user ? tg.initDataUnsafe.user.first_name : '';
+  const t = targets(); const d = dayTotals(todayStr());
+  let h = `<div class="hello"><h1>${name ? 'Привет, ' + esc(name) : 'Привет'}</h1>
+    <p class="muted">${new Date().toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' })}</p></div>`;
+  if (!S.profile) {
+    h += `<div class="panel invite"><h2>Настройте профиль</h2><p>Возраст, рост, вес и цель — чтобы рассчитать ориентиры по калориям и белку. Занимает минуту.</p><button class="btn" data-go="profile">Заполнить профиль</button></div>`;
+  }
+  h += `<div id=\"diaryBody\"></div>`;
+  h += `<div id="skinBody"></div>`;
+  h += `<button class="btn ghost" data-go="scan" data-focus="#library">Мои продукты и сравнение</button>`;
+  $('#homeBody').innerHTML = h;
+  renderDiary();
+  renderSkin();
+}
+function homeTip(d, t) {
+  if (d.sugarItems >= 2) return 'Сегодня уже несколько продуктов с добавленным сахаром. Для кожи важнее общий рисунок недели, чем один день — просто держите это в поле зрения.';
+  if (t && t.protein && d.p < t.protein * 0.5 && new Date().getHours() >= 15) return `Белка пока ${fmt(d.p, 0)} г из ${t.protein}. Творог, яйца, курица, рыба или бобовые помогут добрать.`;
+  if (t && t.fiber && d.fibKnown && d.fib < t.fiber * 0.4 && new Date().getHours() >= 15) return 'Клетчатки пока мало. Овощи, крупы из цельного зерна, бобовые и ягоды снижают гликемическую нагрузку рациона.';
+  return '';
+}
+
+/* ---------- ПРОВЕРКА СОСТАВА ---------- */
+const F = id => $('#f-' + id);
+const NUT_FIELDS = ['kcal', 'protein', 'fat', 'satfat', 'carbs', 'sugars', 'fiber', 'salt'];
+let editingId = null, formSource = 'Ручной ввод';
+function fillCatSelect() {
+  F('cat').innerHTML = Object.entries(CATS).map(([k, v]) => `<option value="${k}">${v}</option>`).join('');
+  F('cat').value = 'other';
+}
+function setFormSource(s) { formSource = s; $('#srcNote').textContent = 'Источник: ' + s; }
+function clearForm() {
+  editingId = null;
+  ['barcode', 'name', 'brand', 'ing', 'price', 'pack'].forEach(k => F(k).value = '');
+  NUT_FIELDS.forEach(k => F(k).value = '');
+  F('cat').value = 'other'; F('pricedate').value = todayStr();
+  setFormSource('Ручной ввод'); $('#lookupMsg').textContent = '';
+  $('#saveBtn').textContent = 'Проанализировать';
+}
+function loadIntoForm(p) {
+  editingId = p.id;
+  F('barcode').value = p.barcode || ''; F('name').value = p.name || ''; F('brand').value = p.brand || '';
+  F('cat').value = p.category || 'other'; F('ing').value = p.ingredients || '';
+  NUT_FIELDS.forEach(k => F(k).value = p.n && p.n[k] != null ? String(p.n[k]).replace('.', ',') : '');
+  F('price').value = p.price || ''; F('pack').value = p.packG || ''; F('pricedate').value = p.priceDate || todayStr();
+  setFormSource(p.source || 'Ручной ввод');
+  $('#saveBtn').textContent = 'Сохранить изменения';
+}
+
+$('#scanForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const name = F('name').value.trim();
+  if (!name) { toast('Укажите название продукта'); F('name').focus(); return; }
+  const n = {}; NUT_FIELDS.forEach(k => n[k] = num(F(k).value));
+  const bad = NUT_FIELDS.find(k => n[k] != null && (n[k] < 0 || (k !== 'kcal' && n[k] > 100) || n[k] > 950));
+  if (bad) { toast(`Проверьте значение «${NUTR[bad]}» — оно указывается на 100 г`); F(bad).focus(); return; }
+  if (n.satfat != null && n.fat != null && n.satfat > n.fat) { toast('Насыщенных жиров не может быть больше, чем жиров всего'); return; }
+  if (n.sugars != null && n.carbs != null && n.sugars > n.carbs) { toast('Сахаров не может быть больше, чем углеводов'); return; }
+  const price = num(F('price').value), packG = num(F('pack').value);
+  const p = {
+    id: editingId || uid(), barcode: F('barcode').value.trim(), name, brand: F('brand').value.trim(),
+    category: F('cat').value, ingredients: F('ing').value.trim(), n,
+    price: price > 0 ? price : null, packG: packG > 0 ? packG : null,
+    priceDate: price > 0 ? (F('pricedate').value || todayStr()) : null,
+    source: formSource, savedAt: new Date().toISOString()
+  };
+  const i = S.products.findIndex(x => x.id === p.id);
+  if (i >= 0) S.products[i] = p; else S.products.unshift(p);
+  if (save()) { haptic(); clearForm(); renderLibrary(); openProduct(p.id); }
+});
+$('#clearBtn').addEventListener('click', clearForm);
+
+/* Open Food Facts */
+const OFF_CATS = [['en:cheeses', 'cheese'], ['en:yogurts', 'dairy'], ['en:dairies', 'dairy'], ['en:breakfast-cereals', 'breakfast'], ['en:cereal-bars', 'breakfast'],
+  ['en:beverages', 'drink'], ['en:breads', 'grain'], ['en:pastas', 'grain'], ['en:cereals-and-potatoes', 'grain'], ['en:sweet-snacks', 'sweets'], ['en:snacks', 'sweets'],
+  ['en:meats', 'meat'], ['en:fishes', 'meat'], ['en:eggs', 'meat'], ['en:fats', 'fatnut'], ['en:nuts', 'fatnut'], ['en:dietary-supplements', 'sport'],
+  ['en:sauces', 'ready'], ['en:meals', 'ready'], ['en:plant-based-foods', 'plant']];
+async function lookupBarcode() {
+  const code = F('barcode').value.replace(/\D/g, '');
+  const msg = $('#lookupMsg');
+  if (code.length < 8) { msg.textContent = 'Введите штрихкод полностью — обычно это 13 цифр под полосками.'; return; }
+  msg.textContent = 'Ищем в Open Food Facts…';
+  const ctrl = new AbortController(); const timer = setTimeout(() => ctrl.abort(), 10000);
+  try {
+    const r = await fetch(`https://world.openfoodfacts.org/api/v2/product/${code}.json?fields=product_name,product_name_ru,brands,ingredients_text_ru,ingredients_text,nutriments,quantity,categories_tags`, { signal: ctrl.signal });
+    if (r.status === 404) { msg.textContent = 'Такого штрихкода нет в Open Food Facts. Введите состав и пищевую ценность с упаковки — это займёт пару минут.'; return; }
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const j = await r.json();
+    if (j.status !== 1 || !j.product) { msg.textContent = 'Такого штрихкода нет в Open Food Facts. Введите состав и пищевую ценность с упаковки.'; return; }
+    const pr = j.product, nm = pr.nutriments || {};
+    F('name').value = pr.product_name_ru || pr.product_name || '';
+    F('brand').value = (pr.brands || '').split(',')[0].trim();
+    const ruIng = pr.ingredients_text_ru, anyIng = pr.ingredients_text;
+    F('ing').value = ruIng || anyIng || '';
+    const kcal = nm['energy-kcal_100g'] != null ? nm['energy-kcal_100g'] : nm.energy_100g != null ? nm.energy_100g / 4.184 : null;
+    const salt = nm.salt_100g != null ? nm.salt_100g : nm.sodium_100g != null ? nm.sodium_100g * 2.5 : null;
+    const vals = { kcal, protein: nm.proteins_100g, fat: nm.fat_100g, satfat: nm['saturated-fat_100g'], carbs: nm.carbohydrates_100g, sugars: nm.sugars_100g, fiber: nm.fiber_100g, salt };
+    NUT_FIELDS.forEach(k => F(k).value = vals[k] != null && isFinite(vals[k]) ? String(Math.round(vals[k] * 10) / 10).replace('.', ',') : '');
+    const tags = pr.categories_tags || [];
+    const cat = OFF_CATS.find(([t]) => tags.includes(t)); F('cat').value = cat ? cat[1] : 'other';
+    const q = /([\d.,]+)\s*(г|g|мл|ml)\b/i.exec(pr.quantity || ''); if (q) F('pack').value = num(q[1]);
+    setFormSource('Open Food Facts (данные сообщества)');
+    const gaps = [];
+    if (!F('ing').value) gaps.push('состава'); if (!F('sugars').value) gaps.push('сахаров'); if (!F('fiber').value) gaps.push('клетчатки');
+    msg.textContent = 'Нашли. Сверьте с упаковкой: данные заполняют пользователи и они бывают неточными.'
+      + (!ruIng && anyIng ? ' Состав не на русском — проверьте его.' : '')
+      + (gaps.length ? ` Не хватает: ${gaps.join(', ')}.` : '') + ' Категорию выберите вручную, если она определилась неверно.';
+    haptic();
+  } catch (err) {
+    msg.textContent = err.name === 'AbortError' ? 'Open Food Facts не ответил за 10 секунд. Попробуйте ещё раз или введите данные вручную.' : 'Не удалось связаться с Open Food Facts. Проверьте интернет или введите данные вручную.';
+  } finally { clearTimeout(timer); }
+}
+$('#lookupBtn').addEventListener('click', lookupBarcode);
+
+/* Камера */
+let scanner = null;
+function loadScript(src) { return new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = rej; document.head.appendChild(s); }); }
+async function startCamera() {
+  const box = $('#reader'), msg = $('#lookupMsg');
+  if (scanner) { stopCamera(); return; }
+  try {
+    if (!window.Html5Qrcode) { msg.textContent = 'Загружаем сканер…'; await loadScript('https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js'); }
+    box.hidden = false; $('#camBtn').textContent = 'Остановить камеру';
+    scanner = new Html5Qrcode('reader');
+    await scanner.start({ facingMode: 'environment' }, { fps: 10, qrbox: { width: 260, height: 130 } }, text => {
+      const digits = text.replace(/\D/g, '');
+      if (digits.length >= 8) { F('barcode').value = digits; haptic(); stopCamera(); lookupBarcode(); }
+    }, () => {});
+    msg.textContent = 'Наведите камеру на штрихкод.';
+  } catch (e) {
+    stopCamera();
+    msg.textContent = 'Камера недоступна в этом окне. Введите цифры штрихкода вручную.';
+  }
+}
+function stopCamera() {
+  const s = scanner; scanner = null;
+  if (s) { s.stop().catch(() => {}).finally(() => { try { s.clear(); } catch (e) {} }); }
+  $('#reader').hidden = true; $('#camBtn').textContent = 'Сканировать камерой';
+}
+$('#camBtn').addEventListener('click', startCamera);
+
+/* Библиотека и сравнение */
+const compareSet = new Set();
+const SKIN_CHIP = { strong: ['berry', 'Кожа: выраженные факторы'], watch: ['amber', 'Кожа: для наблюдения'], low: ['good', 'Кожа: без заметных факторов'], unknown: ['unk', 'Кожа: мало данных'] };
+const VERDICT_TONE = { good: 'good', issues: 'amber', unknown: 'unk' };
+function renderLibrary() {
+  const el = $('#libList');
+  if (!S.products.length) { el.innerHTML = `<p class="muted">Здесь будут продукты, которые вы проверили. Начните с любого из холодильника.</p>`; $('#cmpBtn').hidden = true; return; }
+  const q = ($('#libSearch').value || '').toLowerCase().trim();
+  const list = S.products.filter(p => !q || (p.name + ' ' + (p.brand || '')).toLowerCase().includes(q));
+  el.innerHTML = list.length ? list.map(p => {
+    const a = analyze(p, S.profile); const [tone, label] = SKIN_CHIP[a.skin.level];
+    return `<div class="item"><label class="chk" aria-label="Выбрать для сравнения"><input type="checkbox" data-cmp="${p.id}" ${compareSet.has(p.id) ? 'checked' : ''}></label>
+      <button class="item-main" data-open="${p.id}"><b>${esc(p.name)}</b><small>${esc([p.brand, CATS[p.category]].filter(Boolean).join(', '))}</small>
+      <span class="chips"><span class="chip ${VERDICT_TONE[a.verdict.key]}">${a.verdict.key === 'good' ? 'Подходит' : a.verdict.key === 'issues' ? 'Есть особенности' : 'Мало данных'}</span><span class="chip ${tone}">${label}</span></span></button></div>`;
+  }).join('') : `<p class="muted">Ничего не нашлось по запросу «${esc(q)}».</p>`;
+  $('#cmpBtn').hidden = compareSet.size < 2;
+  $('#cmpBtn').textContent = `Сравнить выбранные (${compareSet.size})`;
+}
+$('#libSearch').addEventListener('input', renderLibrary);
+$('#libList').addEventListener('click', e => {
+  const c = e.target.closest('[data-cmp]');
+  if (c) { if (c.checked) { if (compareSet.size >= 3) { c.checked = false; toast('Сравнить можно до трёх продуктов'); return; } compareSet.add(c.dataset.cmp); } else compareSet.delete(c.dataset.cmp); renderLibrary(); return; }
+  const o = e.target.closest('[data-open]'); if (o) openProduct(o.dataset.open);
+});
+$('#cmpBtn').addEventListener('click', openCompare);
+
+/* ---------- Шторка ---------- */
+function openSheet(html) { $('#sheetBody').innerHTML = html; $('#sheet').hidden = false; document.body.classList.add('locked'); $('#sheet .sheet-panel').scrollTop = 0; if (inTelegram) { try { tg.BackButton.show(); } catch (e) {} } }
+function closeSheet() { $('#sheet').hidden = true; document.body.classList.remove('locked'); if (inTelegram) { try { tg.BackButton.hide(); } catch (e) {} } }
+$('#sheetClose').addEventListener('click', closeSheet);
+$('#sheet').addEventListener('click', e => { if (e.target.id === 'sheet') closeSheet(); });
+if (inTelegram) { try { tg.BackButton.onClick(closeSheet); } catch (e) {} }
+
+const TONE_ICON = { strong: '●', watch: '●', good: '●', info: '○', amber: '●', plain: '○', berry: '●' };
+function factorList(list) {
+  return list.map(f => `<li class="f ${f.tone}"><span class="dot" aria-hidden="true">${TONE_ICON[f.tone] || '○'}</span><div>${f.title ? `<b>${esc(f.title)}</b>` : ''}<p>${esc(f.text)}</p></div></li>`).join('');
+}
+function openProduct(id) {
+  const p = S.products.find(x => x.id === id); if (!p) return;
+  const a = analyze(p, S.profile);
+  const priceTxt = a.value ? `<div class="kv"><span>Цена за 100 ${p.category === 'drink' ? 'мл' : 'г'}</span><b>${fmt(a.value.per100, 1)} ₽</b></div>`
+    + (a.value.per10p ? `<div class="kv"><span>Цена за 10 г белка</span><b>${fmt(a.value.per10p, 1)} ₽</b></div>` : '')
+    + `<p class="note">Цена ${fmt(p.price, 2)} ₽ за ${fmt(p.packG, 0)} ${p.category === 'drink' ? 'мл' : 'г'}, отмечена ${p.priceDate ? ruDate(p.priceDate) : 'без даты'}.${a.value.stale ? ' Цена могла устареть — проверьте в магазине.' : ''}</p>`
+    : `<p class="muted">Цена не указана. Добавьте цену и вес упаковки, чтобы видеть стоимость 100 г и 10 г белка.</p>`;
+  const alts = alternatives(p, a);
+  openSheet(`
+    <article class="label">
+      <header><h2>${esc(p.name)}</h2><p class="muted">${esc([p.brand, CATS[p.category]].filter(Boolean).join(', '))}</p>
+      <p class="src">Источник: ${esc(p.source || 'Ручной ввод')}${p.barcode ? ', штрихкод ' + esc(p.barcode) : ''}</p></header>
+      <div class="verdict ${VERDICT_TONE[a.verdict.key]}">${esc(a.verdict.label)}</div>
+
+      <section><h3>Кожа <span class="chip ${SKIN_CHIP[a.skin.level][0]}">${a.skin.label}</span></h3>
+        ${a.skin.factors.length ? `<ul class="factors">${factorList(a.skin.factors)}</ul>` : `<p class="muted">Добавьте состав или содержание сахаров, чтобы оценить факторы для кожи.</p>`}
+        <p class="note">Это ассоциации из исследований, а не прогноз для вас. Связь питания и акне индивидуальна — проверяйте её в дневнике кожи.</p></section>
+
+      <section><h3>Пищевая ценность на ${a.unit}</h3>
+        <table class="nt"><tbody>
+        <tr><th>Калорийность</th><td>${p.n.kcal != null ? fmt(p.n.kcal, 0) + ' ккал' : 'нет данных'}</td><td></td></tr>
+        ${a.rows.map(r => `<tr><th>${r.name}</th><td>${r.value != null ? fmt(r.value, 1) + ' г' : '—'}</td><td><span class="chip ${r.tone}">${r.label}</span>${r.hint ? `<small>${esc(r.hint)}</small>` : ''}</td></tr>`).join('')}
+        <tr><th>Углеводы</th><td>${p.n.carbs != null ? fmt(p.n.carbs, 1) + ' г' : '—'}</td><td></td></tr>
+        </tbody></table>
+        <p class="note">Пороги: шкала UK FSA для сахаров, жиров и соли; критерии ЕС «источник/много» для белка и клетчатки.</p></section>
+
+      <section><h3>Состав</h3>
+        ${a.comp.items.length ? `<ol class="ing">${a.comp.items.map(i => `<li><span>${esc(i.text).replace(/(^|[^а-я])е(\d{3,4})/g, '$1Е$2')}</span>${i.tags.map(([t, c]) => `<span class="chip ${c}">${t}</span>`).join('')}</li>`).join('')}</ol>` : '<p class="muted">Состав не указан.</p>'}
+        ${a.comp.notes.length ? `<ul class="factors">${factorList(a.comp.notes)}</ul>` : ''}
+        <div class="kv"><span>Возможные аллергены</span><b>${a.comp.allergens.length ? esc(a.comp.allergens.join(', ')) : (a.comp.items.length ? 'не найдены в составе' : 'нет данных')}</b></div>
+        <p class="note">Аллергены определены по словам в составе. При аллергии всегда проверяйте упаковку, включая «может содержать следы».</p></section>
+
+      ${a.fit.length ? `<section><h3>Под вашу цель</h3><ul class="factors">${factorList(a.fit)}</ul></section>` : ''}
+      <section><h3>Цена</h3>${priceTxt}</section>
+      ${a.missing.length ? `<section><h3>Чего не хватает</h3><p>${esc(a.missing.join(', '))}. Добавьте с упаковки, чтобы оценка стала точнее.</p></section>` : ''}
+      ${alts}
+    </article>
+    <div class="addrow"><label>Граммы<input id="addGrams" inputmode="decimal" value="100"></label><button class="btn" id="addToDiary">Добавить в дневник</button></div>
+    <div class="actions"><button class="btn ghost" id="editProd">Изменить данные</button><button class="btn ghost danger" id="delProd">Удалить</button></div>`);
+  $('#addToDiary').onclick = () => {
+    const g = num($('#addGrams').value);
+    if (!g || g <= 0 || g > 5000) { toast('Укажите вес порции в граммах'); return; }
+    S.diary.push(entryFromProduct(p, g, todayStr())); if (save()) { haptic(); toast('Добавлено в дневник на сегодня'); closeSheet(); if (current === 'home') renderHome(); }
+  };
+  $('#editProd').onclick = () => { closeSheet(); go('scan'); loadIntoForm(p); setTimeout(() => $('#scanForm').scrollIntoView({ block: 'start' }), 50); };
+  $('#delProd').onclick = async () => {
+    if (!(await confirmAsk(`Удалить «${p.name}» из ваших продуктов? Записи в дневнике останутся.`))) return;
+    S.products = S.products.filter(x => x.id !== p.id); compareSet.delete(p.id); save(); closeSheet(); renderLibrary();
+  };
+}
+function alternatives(p, a) {
+  const myRank = SKIN_RANK[a.skin.level];
+  const better = S.products.filter(x => x.id !== p.id && x.category === p.category).map(x => ({ x, a: analyze(x, S.profile) }))
+    .filter(({ x, a: b }) => b.skin.level !== 'unknown' && (SKIN_RANK[b.skin.level] < myRank || (SKIN_RANK[b.skin.level] === myRank && (x.n.protein || 0) >= (p.n.protein || 0) + 3)))
+    .sort((u, v) => SKIN_RANK[u.a.skin.level] - SKIN_RANK[v.a.skin.level] || (v.x.n.protein || 0) - (u.x.n.protein || 0)).slice(0, 3);
+  if (!better.length) return '';
+  return `<section><h3>Альтернативы среди ваших продуктов</h3>${better.map(({ x, a: b }) => `<button class="alt" data-alt="${x.id}"><b>${esc(x.name)}</b><small>${b.skin.label}${x.n.protein != null ? ', белок ' + fmt(x.n.protein, 1) + ' г' : ''}</small></button>`).join('')}
+    <p class="note">Подбор идёт только по продуктам, которые вы уже проверили. Каталога цен московских магазинов в приложении нет.</p></section>`;
+}
+$('#sheetBody').addEventListener('click', e => { const b = e.target.closest('[data-alt]'); if (b) openProduct(b.dataset.alt); });
+
+function openCompare() {
+  const ps = [...compareSet].map(id => S.products.find(p => p.id === id)).filter(Boolean);
+  if (ps.length < 2) return;
+  const as = ps.map(p => analyze(p, S.profile));
+  const cats = new Set(ps.map(p => p.category));
+  const yn = (b, known) => !known ? 'нет данных' : b ? 'да' : 'нет';
+  const rows = [
+    ['Кожа', (p, a) => `<span class="chip ${SKIN_CHIP[a.skin.level][0]}">${a.skin.label}</span>`],
+    ['Добавленный сахар', (p, a) => yn(a.flags.addedSugar, !!p.ingredients) + (a.flags.topSugar ? ', в начале состава' : '')],
+    ['Сахара', p => p.n.sugars != null ? fmt(p.n.sugars) + ' г' : '—'],
+    ['Белки', p => p.n.protein != null ? fmt(p.n.protein) + ' г' : '—'],
+    ['Клетчатка', p => p.n.fiber != null ? fmt(p.n.fiber) + ' г' : '—'],
+    ['Калорийность', p => p.n.kcal != null ? fmt(p.n.kcal, 0) + ' ккал' : '—'],
+    ['Насыщенные жиры', p => p.n.satfat != null ? fmt(p.n.satfat) + ' г' : '—'],
+    ['Соль', p => p.n.salt != null ? fmt(p.n.salt, 2) + ' г' : '—'],
+    ['Молочное', (p, a) => yn(a.flags.dairy, !!p.ingredients) + (a.flags.whey ? ', сыворотка' : '')],
+    ['₽ за 100 г', (p, a) => a.value ? fmt(a.value.per100) + ' ₽' + (a.value.stale ? '*' : '') : '—'],
+    ['₽ за 10 г белка', (p, a) => a.value && a.value.per10p ? fmt(a.value.per10p) + ' ₽' : '—']
+  ];
+  openSheet(`<h2>Сравнение</h2>
+    ${cats.size > 1 ? '<p class="note warn">Продукты из разных категорий. Сравнивать их по одним цифрам некорректно — например, йогурт и масло по жирам.</p>' : ''}
+    <div class="scroll-x"><table class="cmp"><thead><tr><th></th>${ps.map(p => `<th>${esc(p.name)}</th>`).join('')}</tr></thead>
+    <tbody>${rows.map(([n, f]) => `<tr><th>${n}</th>${ps.map((p, i) => `<td>${f(p, as[i])}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
+    <p class="note">Значения на 100 г. * — цене больше 30 дней. Итогового «победителя» нет: смотрите на то, что важно для вас.</p>`);
+}
+
+/* ---------- ДНЕВНИК ---------- */
+let diaryDate = todayStr();
+function renderDiary() {
+  const d = dayTotals(diaryDate), t = targets(), list = dayEntries(diaryDate), isToday = diaryDate === todayStr();
+  const m = (label, val, key, cls) => `<div><span>${label}</span><b>${fmt(val, 0)}${t && t[key] ? ' / ' + t[key] : ''} г</b>${t && t[key] ? bar(val, t[key], cls) : ''}</div>`;
+  let h = `<section class="panel"><div class="ph"><h2>${isToday ? 'Сегодня' : ruDate(diaryDate)}</h2><input type="date" id="dDate" value="${diaryDate}" max="${todayStr()}" aria-label="Дата"></div>
+    <div class="kcal"><span class="big">${fmt(d.kcal, 0)}</span><span class="muted">${t && t.kcal ? 'из ' + fmt(t.kcal, 0) + ' ккал' : 'ккал'}</span></div>
+    ${t && t.kcal ? bar(d.kcal, t.kcal) : ''}
+    <div class="macros">${m('Белки', d.p, 'protein', 'sage')}${m('Жиры', d.f, 'fat', 'plain')}${m('Углеводы', d.c, 'carbs', 'plain')}</div>
+    ${t && t.kcal ? `<p class="note">Осталось: ${fmt(Math.max(0, t.kcal - d.kcal), 0)} ккал${t.protein ? ', белка ' + fmt(Math.max(0, t.protein - d.p), 0) + ' г' : ''}.</p>` : `<p class="note">Норма БЖУ появится после заполнения профиля. <button class="link" data-go="profile">Заполнить</button></p>`}
+    ${d.count ? `<div class="quality">
+      <div><span>Клетчатка</span><b>${d.fibKnown ? fmt(d.fib, 0) + (t && t.fiber ? ' из ~' + t.fiber : '') + ' г' : 'нет данных'}</b></div>
+      <div><span>Сахара всего</span><b>${fmt(d.sug, 0)} г</b></div>
+      <div><span>С добавленным сахаром</span><b class="${d.sugarItems ? 'c-berry' : ''}">${d.sugarItems} из ${d.count}</b></div>
+      <div><span>Молочных продуктов</span><b>${d.dairyItems}</b></div></div>` : ''}
+    ${d.incomplete ? `<p class="note">У ${d.incomplete} записей нет части данных — итоги неполные.</p>` : ''}
+    ${isToday && d.count && homeTip(d, t) ? `<p class="tip">${homeTip(d, t)}</p>` : ''}</section>`;
+  h += `<section class="panel"><h2>Что съели</h2>`;
+  h += list.length ? `<ul class="entries">${list.map(e => `<li><div><b>${esc(e.name)}</b><small>${e.grams ? fmt(e.grams, 0) + ' г, ' : ''}${e.n.kcal != null ? fmt(e.n.kcal, 0) + ' ккал' : 'ккал —'}, Б ${fmt(e.n.p, 0)} Ж ${fmt(e.n.f, 0)} У ${fmt(e.n.c, 0)}${e.flags && e.flags.addedSugar ? ' <span class="chip berry">доб. сахар</span>' : ''}${e.flags && e.flags.dairy ? ' <span class="chip sage">молочное</span>' : ''}</small></div><button class="x" data-del="${e.id}" aria-label="Удалить запись">×</button></li>`).join('')}</ul>`
+    : `<p class="muted">Записей за этот день нет.</p>`;
+  h += `</section>`;
+  h += `<section class="panel"><h2>Из моих продуктов</h2>`;
+  h += S.products.length ? `<div class="addrow"><select id="dProd" aria-label="Продукт">${S.products.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('')}</select><label>Граммы<input id="dGrams" inputmode="decimal" value="100"></label><button class="btn" id="dAddProd">Добавить</button></div>`
+    : `<p class="muted">Сначала проверьте продукт во вкладке «Состав» — потом его можно добавлять по граммам.</p>`;
+  h += `</section>`;
+  h += `<section class="panel" id="quickAdd"><h2>Быстрая запись</h2><p class="muted">Для блюд вне дома или без упаковки. Значения — на всю порцию.</p>
+    <form id="qForm" class="grid">
+      <label class="wide">Что съели<input id="qName" required maxlength="80"></label>
+      <label>Ккал<input id="qKcal" inputmode="decimal"></label><label>Белки, г<input id="qP" inputmode="decimal"></label>
+      <label>Жиры, г<input id="qF" inputmode="decimal"></label><label>Углеводы, г<input id="qC" inputmode="decimal"></label>
+      <label class="check wide"><input type="checkbox" id="qSug"> Было с добавленным сахаром (десерт, сладкий напиток, соус)</label>
+      <label class="check wide"><input type="checkbox" id="qDairy"> Было молочное</label>
+      <button class="btn wide">Записать</button></form></section>`;
+  $('#diaryBody').innerHTML = h;
+  if ($('#skinBody') && $('#skinBody').innerHTML) renderSkin();
+  $('#dDate').onchange = e => { if (e.target.value) { diaryDate = e.target.value; renderDiary(); } };
+  if ($('#dAddProd')) $('#dAddProd').onclick = () => {
+    const p = S.products.find(x => x.id === $('#dProd').value), g = num($('#dGrams').value);
+    if (!p || !g || g <= 0 || g > 5000) { toast('Укажите вес порции в граммах'); return; }
+    S.diary.push(entryFromProduct(p, g, diaryDate)); if (save()) { haptic(); renderDiary(); }
+  };
+  $('#qForm').onsubmit = e => {
+    e.preventDefault();
+    const vals = ['qKcal', 'qP', 'qF', 'qC'].map(id => num($('#' + id).value));
+    if (vals.some(v => v != null && v < 0)) { toast('Значения не могут быть отрицательными'); return; }
+    S.diary.push({ id: uid(), date: diaryDate, name: $('#qName').value.trim(), productId: null, grams: null,
+      n: { kcal: vals[0], p: vals[1], f: vals[2], c: vals[3], sug: null, fib: null },
+      flags: { addedSugar: $('#qSug').checked, dairy: $('#qDairy').checked } });
+    if (save()) { haptic(); renderDiary(); }
+  };
+  $('#diaryBody').querySelectorAll('[data-del]').forEach(b => b.onclick = async () => {
+    if (!(await confirmAsk('Удалить запись из дневника?'))) return;
+    S.diary = S.diary.filter(x => x.id !== b.dataset.del); save(); renderDiary();
+  });
+}
+
+/* ---------- КОЖА ---------- */
+const SKIN_SCALE = { 1: 'много воспалений', 2: 'заметные высыпания', 3: 'отдельные высыпания', 4: 'почти чисто', 5: 'чистая кожа' };
+let skinDate = todayStr();
+function skinPattern(flag) {
+  const exp = [], non = [];
+  for (const e of S.skin) {
+    const window = [addDays(e.date, -1), addDays(e.date, -2)];
+    const items = S.diary.filter(x => window.includes(x.date));
+    if (!items.length) continue;
+    (items.some(x => x.flags && x.flags[flag]) ? exp : non).push(e.score);
+  }
+  const avg = a => a.reduce((s, x) => s + x, 0) / a.length;
+  return { exp: exp.length, non: non.length, ok: exp.length >= 5 && non.length >= 5, a: exp.length ? avg(exp) : null, b: non.length ? avg(non) : null };
+}
+function renderSkin() {
+  const cur = S.skin.find(e => e.date === skinDate) || {};
+  const seg = (name, val, labels) => `<div class="seg" role="radiogroup">${Object.entries(labels).map(([v, l]) => `<label><input type="radio" name="${name}" value="${v}" ${String(val) === v ? 'checked' : ''}><span>${l}</span></label>`).join('')}</div>`;
+  let h = `<div class="ph sec-head"><h2>Кожа</h2><input type="date" id="sDate" value="${skinDate}" max="${todayStr()}" aria-label="Дата"></div>
+  <form id="skinForm" class="panel">
+    <h2>Состояние кожи</h2><p class="muted">Заполните то, что хотите. Обязательно только состояние.</p>
+    ${seg('score', cur.score, { 1: '1', 2: '2', 3: '3', 4: '4', 5: '5' })}
+    <p class="scale-cap"><span>много воспалений</span><span>чистая кожа</span></p>
+    <div class="grid">
+      <label>Новых воспалений<input id="sNew" inputmode="numeric" value="${cur.newSpots ?? ''}"></label>
+      <label>Сон, часов<input id="sSleep" inputmode="decimal" value="${cur.sleep ?? ''}"></label>
+    </div>
+    <h3>Стресс</h3>${seg('stress', cur.stress, { 1: 'низкий', 2: 'средний', 3: 'высокий' })}
+    <label class="check"><input type="checkbox" id="sCare" ${cur.careChange ? 'checked' : ''}> Меняли уход или косметику</label>
+    <label>Заметка<textarea id="sNote" rows="2" maxlength="300">${esc(cur.note || '')}</textarea></label>
+    <button class="btn">Сохранить запись</button>
+  </form>`;
+  // график 28 дней
+  const days = [...Array(28)].map((_, i) => addDays(todayStr(), i - 27));
+  const bars = days.map((d, i) => {
+    const e = S.skin.find(x => x.date === d), dt = dayTotals(d), x = 4 + i * 10;
+    return (e ? `<rect x="${x}" y="${100 - e.score * 18}" width="7" height="${e.score * 18}" rx="2" class="s${e.score}"><title>${ruDate(d)}: ${SKIN_SCALE[e.score]}</title></rect>` : `<rect x="${x}" y="98" width="7" height="2" class="empty"/>`)
+      + (dt.sugarItems ? `<circle cx="${x + 3.5}" cy="108" r="2.2" class="dot-sugar"/>` : '')
+      + (dt.dairyItems ? `<circle cx="${x + 3.5}" cy="115" r="2.2" class="dot-dairy"/>` : '');
+  }).join('');
+  h += `<section class="panel"><h2>Последние 4 недели</h2>
+    <div class="scroll-x"><svg class="chart" viewBox="0 0 286 120" role="img" aria-label="Состояние кожи по дням">${bars}</svg></div>
+    <p class="legend"><span><i class="lg-bar"></i>состояние (выше — чище)</span><span><i class="lg-sugar"></i>был добавленный сахар</span><span><i class="lg-dairy"></i>было молочное</span></p></section>`;
+  // закономерности
+  const ps = skinPattern('addedSugar'), pd = skinPattern('dairy');
+  const line = (p, what) => p.ok ? `<p>Через 1–2 дня после дней, когда было ${what}, средняя оценка кожи — <b>${fmt(p.a, 1)}</b>, после остальных — <b>${fmt(p.b, 1)}</b> (${p.exp} и ${p.non} записей).</p>`
+    : `<p class="muted">Про ${what}: пока мало данных (${p.exp} и ${p.non} записей из нужных 5 и 5).</p>`;
+  h += `<section class="panel"><h2>Совпадения с питанием</h2>${line(ps, 'добавленный сахар')}${line(pd, 'молочное')}
+    <p class="note">Совпадение — не доказательство причины. На кожу влияют сон, стресс, гормональный цикл, уход и лечение. Не исключайте сразу несколько групп продуктов: если хотите проверить одну, меняйте её одну на 4–6 недель и продолжайте записи. При стойком или болезненном акне обратитесь к дерматологу.</p></section>`;
+  const hist = [...S.skin].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 14);
+  if (hist.length) h += `<section class="panel"><h2>История</h2><ul class="entries">${hist.map(e => `<li><div><b>${ruDate(e.date)}: ${e.score}/5</b><small>${SKIN_SCALE[e.score]}${e.newSpots != null ? ', новых: ' + e.newSpots : ''}${e.sleep != null ? ', сон ' + fmt(e.sleep) + ' ч' : ''}${e.note ? ', ' + esc(e.note) : ''}</small></div><button class="x" data-sdel="${e.date}" aria-label="Удалить запись">×</button></li>`).join('')}</ul></section>`;
+  $('#skinBody').innerHTML = h;
+  $('#sDate').onchange = e => { if (e.target.value) { skinDate = e.target.value; renderSkin(); } };
+  $('#skinForm').onsubmit = e => {
+    e.preventDefault();
+    const score = Number(($('#skinForm').querySelector('input[name=score]:checked') || {}).value);
+    if (!score) { toast('Отметьте состояние кожи от 1 до 5'); return; }
+    const stress = Number(($('#skinForm').querySelector('input[name=stress]:checked') || {}).value) || null;
+    const rec = { date: skinDate, score, newSpots: num($('#sNew').value), sleep: num($('#sSleep').value), stress, careChange: $('#sCare').checked, note: $('#sNote').value.trim() };
+    S.skin = S.skin.filter(x => x.date !== skinDate).concat(rec);
+    if (save()) { haptic(); toast('Запись сохранена'); renderSkin(); }
+  };
+  $('#skinBody').querySelectorAll('[data-sdel]').forEach(b => b.onclick = async () => {
+    if (!(await confirmAsk(`Удалить запись за ${ruDate(b.dataset.sdel)}?`))) return;
+    S.skin = S.skin.filter(x => x.date !== b.dataset.sdel); save(); renderSkin();
+  });
+}
+
+/* ---------- ПРОФИЛЬ ---------- */
+function renderProfile() {
+  const p = S.profile || {}, t = targets();
+  const opt = (obj, val) => Object.entries(obj).map(([k, v]) => `<option value="${k}" ${String(val) === String(k) ? 'selected' : ''}>${v}</option>`).join('');
+  let h = `<h1>Профиль</h1>
+  <form id="profForm" class="panel">
+    <div class="grid">
+      <label>Возраст<input id="pAge" inputmode="numeric" value="${p.age ?? ''}"></label>
+      <label>Пол для формулы<select id="pSex">${opt({ '': 'не указывать', m: 'мужской', f: 'женский' }, p.sex || '')}</select></label>
+      <label>Рост, см<input id="pH" inputmode="decimal" value="${p.height ?? ''}"></label>
+      <label>Вес, кг<input id="pW" inputmode="decimal" value="${p.weight ?? ''}"></label>
+      <label class="wide">Активность<select id="pAct">${opt(ACT, p.activity || 1.375)}</select></label>
+      <label class="wide">Цель<select id="pGoal">${opt(GOALS, p.goal || 'maintain')}</select></label>
+    </div>
+    <h3>Аллергии и непереносимость</h3>
+    <div class="checks">${Object.entries(ALLERGENS).map(([k, a]) => `<label class="check"><input type="checkbox" name="alg" value="${k}" ${(p.allergies || []).includes(k) ? 'checked' : ''}> ${a.label}</label>`).join('')}</div>
+    <label class="check"><input type="checkbox" id="pDairy" ${p.dairyWatch ? 'checked' : ''}> Хочу отдельно наблюдать за молочным для кожи</label>
+    <h3>Свои ориентиры</h3><p class="muted">Если вы работаете с тренером или нутрициологом — впишите его цифры, они заменят расчёт.</p>
+    <div class="grid"><label>Ккал в день<input id="pMK" inputmode="numeric" value="${p.manualKcal ?? ''}"></label><label>Белок, г<input id="pMP" inputmode="numeric" value="${p.manualProtein ?? ''}"></label></div>
+    <button class="btn">Сохранить профиль</button>
+  </form>`;
+  if (t) {
+    h += `<section class="panel"><h2>Ориентиры на день</h2>
+      <div class="macros four"><div><span>Ккал</span><b>${fmt(t.kcal, 0)}</b></div><div><span>Белки</span><b>${t.protein != null ? t.protein + ' г' : '—'}</b></div><div><span>Жиры</span><b>${t.fat != null ? t.fat + ' г' : '—'}</b></div><div><span>Углеводы</span><b>${t.carbs != null ? t.carbs + ' г' : '—'}</b></div></div>
+      ${t.bmr ? `<p class="note">Основной обмен по формуле Миффлина — Сан Жеора: ${fmt(t.bmr, 0)} ккал, с учётом активности: ${fmt(t.tdee, 0)} ккал.${t.sexUnknown ? ' Пол не указан — взято среднее между формулами, точность ниже.' : ''} Это оценка, а не измерение: сверяйтесь с динамикой веса за 2–3 недели и корректируйте.</p>` : ''}
+      ${t.manual ? '<p class="note">Учтены ваши собственные ориентиры.</p>' : ''}</section>`;
+  }
+  h += `<section class="panel"><h2>Источники данных</h2>
+    <ul class="conn"><li><span class="chip good">подключено</span> Open Food Facts — поиск по штрихкоду. База сообщества: российских товаров в ней много, но не все, данные стоит сверять с упаковкой.</li>
+    <li><span class="chip unk">не подключено</span> Цены и наличие в магазинах Москвы. Открытых API у сетей нет — цену вы вводите сами, приложение хранит дату.</li>
+    <li><span class="chip unk">не подключено</span> Распознавание этикетки по фото (нужен сервер с OCR или AI).</li></ul>
+    <p class="note">Все данные хранятся только на этом устройстве, внутри Telegram. Они не отправляются на сервер.</p></section>
+  <section class="panel"><h2>Данные</h2><button class="btn ghost" id="exportBtn">Скопировать данные (JSON)</button><button class="btn ghost danger" id="wipeBtn">Удалить все мои данные</button></section>`;
+  $('#profileBody').innerHTML = h;
+  $('#profForm').onsubmit = e => {
+    e.preventDefault();
+    const age = num($('#pAge').value), height = num($('#pH').value), weight = num($('#pW').value);
+    if (age != null && (age < 14 || age > 100)) { toast('Возраст: от 14 до 100 лет'); return; }
+    if (height != null && (height < 120 || height > 230)) { toast('Рост укажите в сантиметрах'); return; }
+    if (weight != null && (weight < 35 || weight > 250)) { toast('Вес укажите в килограммах'); return; }
+    const mk = num($('#pMK').value);
+    if (mk != null && mk < 1200) { toast('Меньше 1200 ккал в день без наблюдения врача не рекомендуется'); return; }
+    S.profile = { age, height, weight, sex: $('#pSex').value || null, activity: Number($('#pAct').value), goal: $('#pGoal').value,
+      allergies: [...document.querySelectorAll('input[name=alg]:checked')].map(i => i.value), dairyWatch: $('#pDairy').checked,
+      manualKcal: mk, manualProtein: num($('#pMP').value) };
+    if (save()) { haptic(); toast('Профиль сохранён'); renderProfile(); }
+  };
+  $('#exportBtn').onclick = async () => {
+    const data = JSON.stringify(S, null, 1);
+    try { await navigator.clipboard.writeText(data); toast('Данные скопированы — вставьте их в заметки или файл'); }
+    catch (e) { openSheet(`<h2>Ваши данные</h2><p class="muted">Скопируйте текст вручную.</p><textarea class="dump" readonly>${esc(data)}</textarea>`); }
+  };
+  $('#wipeBtn').onclick = async () => {
+    if (!(await confirmAsk('Удалить профиль, продукты, дневник питания и дневник кожи? Это нельзя отменить.'))) return;
+    S = blank(); compareSet.clear(); try { localStorage.removeItem(KEY); } catch (e) {}
+    haptic('warning'); toast('Все данные удалены'); go('home');
+  };
+}
+
+/* ---------- старт ---------- */
+fillCatSelect(); clearForm(); go('home');
+
+</script>
+</body>
+</html>
