@@ -240,14 +240,14 @@ details summary{cursor:pointer;color:var(--sage);font-weight:600;font-size:14px;
       <div class="btnrow"><button type="button" class="btn ghost" id="camBtn">Сканировать камерой</button><button type="button" class="btn ghost" id="bcPhotoBtn">Сфоткать штрихкод</button></div>
       <input type="file" id="bcPhotoInput" accept="image/*" capture="environment" hidden>
       <p id="lookupMsg" class="muted" aria-live="polite"></p>
-      <div class="row"><label>Или по названию<input id="offQuery" type="search" placeholder="Актибио вишня" autocomplete="off"></label><button type="button" class="btn" id="offSearchBtn">Найти</button></div>
+      <div class="row"><label>Или по названию — еда или товар<input id="offQuery" type="search" placeholder="гречка 200 г, Актибио вишня" autocomplete="off" enterkeyhint="search"></label><button type="button" class="btn" id="offSearchBtn">Найти</button></div>
       <div id="offResults"></div>
       <button type="button" class="btn photo" id="photoBtn">Сфотографировать состав</button>
       <input type="file" id="photoInput" accept="image/*" hidden>
       <p class="hint">Снимите заднюю сторону упаковки — состав и таблицу пищевой ценности. Приложение перепишет их в форму, а если на фото есть штрихкод — найдёт и его.</p>
       <div id="reader" hidden></div>
       <button type="button" class="link" id="clearBtn">Очистить форму</button>
-      <details id="ocrRawBox" hidden><summary>Распознанный текст целиком</summary><textarea id="ocrRaw" rows="6" readonly></textarea></details>
+      <details id="ocrRawBox" hidden><summary>Распознанный текст целиком</summary><textarea id="ocrRaw" rows="6"></textarea><button type="button" class="btn ghost" id="ocrPaste">Вставить в состав</button></details>
 
       <h2 style="margin-top:14px">Данные с упаковки</h2>
       <label>Название<input id="f-name" maxlength="120" required></label>
@@ -566,6 +566,63 @@ function analyze(p, profile, now) {
 }
 
 
+
+/* Ориентиры на день (Миффлин — Сан Жеор). Защита: не ниже основного обмена и безопасного минимума; подросткам — без дефицита. */
+const ACT_LEVELS = [1.2, 1.375, 1.55, 1.725];
+const GOAL_ADJ = { cut: -0.15, bulk: 0.10, recomp: -0.05, maintain: 0, perf: 0 };
+const PROT_PER_KG = { cut: 2.0, bulk: 1.8, recomp: 2.0, maintain: 1.6, perf: 1.8 };
+const KCAL_FLOOR = { m: 1500, f: 1200, u: 1350 };
+function calcTargets(p) {
+  if (!p) return null;
+  const { age, height, weight } = p;
+  let t = null;
+  if (age && height && weight) {
+    const sexAdj = p.sex === 'm' ? 5 : p.sex === 'f' ? -161 : -78;
+    const bmr = 10 * weight + 6.25 * height - 5 * age + sexAdj;
+    const tdee = bmr * (ACT_LEVELS.includes(p.activity) ? p.activity : 1.375);
+    const teen = age < 18;
+    let adj = GOAL_ADJ[p.goal] || 0;
+    if (teen && adj < 0) adj = 0;
+    let kcal = Math.round(tdee * (1 + adj) / 50) * 50;
+    const floor = Math.max(KCAL_FLOOR[p.sex || 'u'], Math.round(bmr / 50) * 50);
+    const floored = adj < 0 && kcal < floor;
+    if (floored) kcal = Math.min(Math.round(tdee / 50) * 50, floor);
+    const protein = Math.round(weight * (PROT_PER_KG[p.goal] || 1.6));
+    const fat = Math.round(weight * 0.9);
+    const carbs = Math.max(0, Math.round((kcal - protein * 4 - fat * 9) / 4));
+    t = { bmr: Math.round(bmr), tdee: Math.round(tdee), kcal, protein, fat, carbs, fiber: Math.round(kcal / 1000 * 14), sexUnknown: !p.sex, teen: teen && (GOAL_ADJ[p.goal] || 0) < 0, floored };
+  }
+  if (p.manualKcal) { t = t || { protein: null, fat: null, carbs: null }; t.kcal = p.manualKcal; t.fiber = Math.round(p.manualKcal / 1000 * 14); t.manual = true; }
+  if (p.manualProtein) { t = t || {}; t.protein = p.manualProtein; t.manual = true; }
+  return t;
+}
+function eanValid(code) {
+  if (/^\d{8}$/.test(code)) return true; // EAN-8 и UPC-E считаются по-разному — короткие коды не блокируем
+  if (!/^\d{12,14}$/.test(code)) return false;
+  const d = code.split('').map(Number), check = d.pop();
+  const sum = d.reverse().reduce((s, x, i) => s + x * (i % 2 === 0 ? 3 : 1), 0);
+  return (10 - sum % 10) % 10 === check;
+}
+function parseNum(v) {
+  if (v == null) return null;
+  const s = String(v).trim().replace(/[\s\u00a0]/g, '').replace(',', '.');
+  if (s === '' || !/^-?\d*\.?\d+$/.test(s)) return null;
+  const x = parseFloat(s); return isFinite(x) ? x : null;
+}
+/* Проверка импортируемой резервной копии */
+function validateBackup(o) {
+  const errs = [];
+  if (!o || typeof o !== 'object') return { ok: false, errs: ['это не данные NUTRIQ'] };
+  const okId = id => typeof id === 'string' && /^[a-z0-9]{4,40}$/.test(id);
+  const okDate = d => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d);
+  const products = Array.isArray(o.products) ? o.products.filter(p => p && okId(p.id) && typeof p.name === 'string') : [];
+  const diary = Array.isArray(o.diary) ? o.diary.filter(x => x && okId(x.id) && okDate(x.date) && typeof x.name === 'string') : [];
+  const skin = Array.isArray(o.skin) ? o.skin.filter(x => x && okDate(x.date) && [1, 2, 3, 4, 5].includes(x.score)) : [];
+  const profile = o.profile && typeof o.profile === 'object' ? o.profile : null;
+  if (!products.length && !diary.length && !skin.length && !profile) errs.push('в файле нет продуктов, записей или профиля');
+  return { ok: !errs.length, errs, data: { profile, products, diary, skin } };
+}
+
 /* Признаки сильной обработки — группы, а не отдельные Е-коды */
 const UPF_GROUPS = [
   ['ароматизаторы', /ароматизатор/],
@@ -680,9 +737,132 @@ function dayInsights(entries, t) {
   return out;
 }
 
+/* Справочник обычной еды: средние значения на 100 г (готовый продукт, если не указано иное).
+   [название, категория, ккал, белки, жиры, насыщ., углеводы, сахара, клетчатка, соль, состав, синонимы] */
+const FOODS = [
+  ['Гречка варёная', 'grain', 92, 3.4, 0.6, 0.1, 19.9, 0.9, 2.7, 0, 'гречневая крупа, вода', 'гречневая каша'],
+  ['Рис белый варёный', 'grain', 130, 2.7, 0.3, 0.1, 28.2, 0.1, 0.4, 0, 'рис белый, вода', 'рис'],
+  ['Рис бурый варёный', 'grain', 112, 2.3, 0.8, 0.2, 23.5, 0.4, 1.8, 0, 'бурый рис, вода', 'рис коричневый'],
+  ['Овсянка на воде', 'grain', 71, 2.5, 1.5, 0.3, 12, 0.3, 1.7, 0, 'овсяные хлопья, вода', 'овсяная каша геркулес'],
+  ['Овсяные хлопья (сухие)', 'grain', 379, 13.2, 6.5, 1.1, 67.7, 1, 10.1, 0, 'овсяные хлопья', 'геркулес'],
+  ['Макароны варёные', 'grain', 158, 5.8, 0.9, 0.2, 30.9, 0.6, 1.8, 0, 'мука пшеничная, вода', 'паста спагетти'],
+  ['Булгур варёный', 'grain', 83, 3.1, 0.2, 0, 18.6, 0.1, 4.5, 0, 'булгур, вода', ''],
+  ['Киноа варёная', 'grain', 120, 4.4, 1.9, 0.2, 21.3, 0.9, 2.8, 0, 'киноа, вода', ''],
+  ['Перловка варёная', 'grain', 123, 2.3, 0.4, 0.1, 28.2, 0.3, 3.8, 0, 'перловая крупа, вода', 'перловая каша'],
+  ['Картофель варёный', 'plant', 87, 1.9, 0.1, 0, 20.1, 0.9, 1.8, 0, 'картофель', 'картошка'],
+  ['Картофельное пюре с молоком и маслом', 'ready', 113, 2, 4.2, 2.6, 17, 1.5, 1.5, 0.5, 'картофель, молоко, масло сливочное, соль', 'пюре'],
+  ['Картофель фри', 'ready', 312, 3.4, 15, 2.3, 41, 0.3, 3.8, 0.5, 'картофель, масло растительное, соль', 'фри картошка'],
+  ['Хлеб белый пшеничный', 'grain', 265, 9, 3.2, 0.7, 49, 5, 2.7, 1.2, 'мука пшеничная высшего сорта, вода, дрожжи, сахар, соль', 'батон'],
+  ['Хлеб ржаной', 'grain', 230, 7, 1.3, 0.2, 45, 4, 6, 1.2, 'мука ржаная, мука пшеничная, вода, солод, соль', 'бородинский черный'],
+  ['Хлеб цельнозерновой', 'grain', 247, 13, 3.4, 0.7, 41, 6, 7, 1.1, 'мука пшеничная цельнозерновая, вода, дрожжи, соль', ''],
+  ['Лаваш', 'grain', 277, 9, 1, 0.2, 56, 1, 2.2, 1, 'мука пшеничная, вода, соль', ''],
+  ['Куриная грудка (варёная или запечённая)', 'meat', 165, 31, 3.6, 1, 0, 0, 0, 0.2, 'куриное филе', 'курица филе грудка'],
+  ['Куриное бедро без кожи (запечённое)', 'meat', 209, 26, 10.9, 3, 0, 0, 0, 0.2, 'курица', 'курица бедро окорочок'],
+  ['Индейка, грудка', 'meat', 135, 30, 1, 0.3, 0, 0, 0, 0.2, 'индейка', 'филе индейки'],
+  ['Говядина отварная', 'meat', 230, 27, 13, 5.5, 0, 0, 0, 0.2, 'говядина', 'мясо'],
+  ['Свинина запечённая', 'meat', 242, 27, 14, 5, 0, 0, 0, 0.2, 'свинина', 'мясо'],
+  ['Котлета говяжья жареная', 'meat', 260, 18, 18, 7, 8, 1, 0.5, 1.1, 'говядина, хлеб, лук, яйцо, соль, масло растительное', 'котлеты'],
+  ['Лосось запечённый', 'meat', 206, 22, 12, 2.5, 0, 0, 0, 0.2, 'лосось', 'семга форель красная рыба'],
+  ['Треска запечённая', 'meat', 105, 23, 0.9, 0.2, 0, 0, 0, 0.2, 'треска', 'рыба белая минтай'],
+  ['Тунец консервированный в собственном соку', 'meat', 116, 25.5, 0.8, 0.2, 0, 0, 0, 0.9, 'тунец, вода, соль', 'консервы'],
+  ['Креветки варёные', 'meat', 99, 24, 0.3, 0.1, 0.2, 0, 0, 0.6, 'креветки', ''],
+  ['Яйцо куриное варёное', 'meat', 155, 12.6, 10.6, 3.3, 1.1, 1.1, 0, 0.3, 'яйцо куриное', 'яйца'],
+  ['Омлет из 2 яиц с молоком', 'ready', 154, 10.6, 11.7, 3.4, 1.6, 1.4, 0, 0.4, 'яйцо куриное, молоко, соль, масло', 'яичница'],
+  ['Творог 0%', 'dairy', 72, 16.5, 0.5, 0.3, 1.3, 1.3, 0, 0.1, 'молоко обезжиренное, закваска', 'обезжиренный'],
+  ['Творог 5%', 'dairy', 121, 17.2, 5, 3.2, 1.8, 1.8, 0, 0.1, 'молоко нормализованное, закваска', ''],
+  ['Творог 9%', 'dairy', 159, 16.7, 9, 5.7, 2, 2, 0, 0.1, 'молоко нормализованное, закваска', ''],
+  ['Сыр твёрдый (гауда, российский)', 'cheese', 356, 25, 27, 17, 2, 0.5, 0, 1.6, 'молоко, соль, закваска, сычужный фермент', 'сыр'],
+  ['Моцарелла', 'cheese', 280, 22, 22, 13, 2, 1, 0, 1.6, 'молоко, соль, закваска', 'сыр'],
+  ['Молоко 2,5%', 'dairy', 52, 2.8, 2.5, 1.6, 4.7, 4.7, 0, 0.1, 'молоко', ''],
+  ['Кефир 1%', 'dairy', 40, 3, 1, 0.6, 4, 4, 0, 0.1, 'молоко нормализованное, закваска', ''],
+  ['Йогурт греческий натуральный 2%', 'dairy', 66, 7, 2, 1.3, 4, 4, 0, 0.1, 'молоко нормализованное, закваска', 'йогурт'],
+  ['Сметана 15%', 'dairy', 162, 2.6, 15, 9.5, 3.6, 3.6, 0, 0.1, 'сливки, закваска', ''],
+  ['Тофу', 'plant', 76, 8, 4.8, 0.7, 1.9, 0.6, 0.3, 0, 'соевые бобы, вода', 'соевый творог'],
+  ['Чечевица варёная', 'plant', 116, 9, 0.4, 0.1, 20, 1.8, 7.9, 0, 'чечевица, вода', ''],
+  ['Нут варёный', 'plant', 164, 8.9, 2.6, 0.3, 27.4, 4.8, 7.6, 0, 'нут, вода', ''],
+  ['Фасоль красная варёная', 'plant', 127, 8.7, 0.5, 0.1, 22.8, 0.3, 6.4, 0, 'фасоль, вода', ''],
+  ['Огурец', 'plant', 15, 0.7, 0.1, 0, 3.6, 1.7, 0.5, 0, 'огурец', 'огурцы'],
+  ['Помидор', 'plant', 18, 0.9, 0.2, 0, 3.9, 2.6, 1.2, 0, 'помидор', 'томат помидоры'],
+  ['Брокколи варёная', 'plant', 35, 2.4, 0.4, 0.1, 7.2, 1.4, 3.3, 0, 'брокколи', ''],
+  ['Капуста белокочанная', 'plant', 25, 1.3, 0.1, 0, 5.8, 3.2, 2.5, 0, 'капуста', ''],
+  ['Морковь', 'plant', 41, 0.9, 0.2, 0, 9.6, 4.7, 2.8, 0, 'морковь', ''],
+  ['Салат листовой', 'plant', 15, 1.4, 0.2, 0, 2.9, 0.8, 1.3, 0, 'салат', 'зелень'],
+  ['Авокадо', 'plant', 160, 2, 14.7, 2.1, 8.5, 0.7, 6.7, 0, 'авокадо', ''],
+  ['Яблоко', 'plant', 52, 0.3, 0.2, 0, 13.8, 10.4, 2.4, 0, 'яблоко', 'яблоки'],
+  ['Банан', 'plant', 89, 1.1, 0.3, 0.1, 22.8, 12.2, 2.6, 0, 'банан', 'бананы'],
+  ['Апельсин', 'plant', 47, 0.9, 0.1, 0, 11.8, 9.4, 2.4, 0, 'апельсин', ''],
+  ['Мандарин', 'plant', 53, 0.8, 0.3, 0, 13.3, 10.6, 1.8, 0, 'мандарин', 'мандарины'],
+  ['Груша', 'plant', 57, 0.4, 0.1, 0, 15.2, 9.8, 3.1, 0, 'груша', ''],
+  ['Клубника', 'plant', 32, 0.7, 0.3, 0, 7.7, 4.9, 2, 0, 'клубника', 'ягоды'],
+  ['Черника', 'plant', 57, 0.7, 0.3, 0, 14.5, 10, 2.4, 0, 'черника', 'ягоды'],
+  ['Виноград', 'plant', 69, 0.7, 0.2, 0.1, 18.1, 15.5, 0.9, 0, 'виноград', ''],
+  ['Финики сушёные', 'plant', 282, 2.5, 0.4, 0, 75, 63, 8, 0, 'финики', 'сухофрукты'],
+  ['Грецкий орех', 'fatnut', 654, 15.2, 65.2, 6.1, 13.7, 2.6, 6.7, 0, 'грецкий орех', 'орехи'],
+  ['Миндаль', 'fatnut', 579, 21.2, 49.9, 3.8, 21.6, 4.4, 12.5, 0, 'миндаль', 'орехи'],
+  ['Арахис', 'fatnut', 567, 25.8, 49.2, 6.3, 16.1, 4.7, 8.5, 0, 'арахис', 'орехи'],
+  ['Арахисовая паста без сахара', 'fatnut', 588, 25, 50, 10, 20, 9, 6, 0, 'арахис', 'арахисовое масло'],
+  ['Семена чиа', 'fatnut', 486, 16.5, 30.7, 3.3, 42.1, 0, 34.4, 0, 'семена чиа', 'чиа'],
+  ['Масло оливковое', 'fatnut', 884, 0, 100, 14, 0, 0, 0, 0, 'масло оливковое', ''],
+  ['Масло подсолнечное', 'fatnut', 884, 0, 100, 10, 0, 0, 0, 0, 'масло подсолнечное', 'растительное'],
+  ['Масло сливочное 82%', 'fatnut', 748, 0.5, 82.5, 52, 0.8, 0.8, 0, 0, 'сливки', ''],
+  ['Шоколад молочный', 'sweets', 535, 7.7, 29.7, 18.5, 59.4, 51.5, 3.4, 0.2, 'сахар, масло какао, молоко сухое, какао тёртое, эмульгатор', ''],
+  ['Шоколад горький 70%', 'sweets', 598, 7.8, 42.6, 24.5, 45.9, 24, 10.9, 0, 'какао тёртое, сахар, масло какао', 'темный'],
+  ['Мороженое пломбир', 'sweets', 232, 3.2, 15, 9, 20.8, 20, 0, 0.1, 'молоко, сливки, сахар, сухое молоко, стабилизатор', ''],
+  ['Чипсы картофельные', 'sweets', 536, 7, 34.6, 3.1, 53, 0.3, 4.4, 1.3, 'картофель, масло растительное, соль, ароматизатор', ''],
+  ['Мёд', 'sweets', 304, 0.3, 0, 0, 82.4, 82.1, 0.2, 0, 'мёд', ''],
+  ['Гранола с сахаром', 'breakfast', 471, 10, 20, 4, 64, 25, 7, 0.3, 'овсяные хлопья, сахар, масло растительное, мёд', 'мюсли'],
+  ['Блины', 'ready', 233, 6, 12, 3, 26, 5, 1, 0.5, 'мука пшеничная, молоко, яйцо, сахар, масло, соль', 'блинчики'],
+  ['Сырники', 'ready', 220, 15, 9, 5, 19, 7, 0.5, 0.3, 'творог, мука пшеничная, яйцо, сахар, масло', ''],
+  ['Пельмени варёные', 'ready', 248, 11.9, 12.4, 5, 23, 1, 1, 1.1, 'мука пшеничная, свинина, говядина, лук, соль', ''],
+  ['Борщ', 'ready', 49, 1.1, 2.2, 0.7, 6.7, 2.7, 1.4, 0.5, 'свёкла, капуста, картофель, морковь, мясной бульон, соль', 'суп'],
+  ['Куриный суп с лапшой', 'ready', 36, 2.5, 1.2, 0.3, 4, 0.4, 0.3, 0.6, 'куриный бульон, курица, лапша, морковь, соль', 'суп'],
+  ['Салат оливье', 'ready', 198, 5.5, 16.5, 2.5, 7.5, 2, 1.5, 0.9, 'картофель, колбаса варёная (нитрит натрия), яйцо, горошек, майонез, огурец', 'оливье'],
+  ['Пицца пепперони', 'ready', 298, 12.4, 13, 5.5, 32, 3.6, 2, 1.6, 'тесто (мука пшеничная, вода, дрожжи), сыр, колбаса пепперони (нитрит натрия), томатный соус', 'пицца'],
+  ['Чизбургер', 'ready', 265, 13, 12, 5.5, 27, 6, 1.3, 1.6, 'булочка (мука пшеничная, сахар), котлета говяжья, сыр плавленый, кетчуп, соль', 'бургер гамбургер'],
+  ['Шаурма с курицей', 'ready', 210, 11, 10, 3, 19, 2, 1.5, 1.3, 'лаваш, курица, овощи, соус майонезный, соль', 'шаверма'],
+  ['Сосиски молочные', 'meat', 266, 11, 23.9, 9, 1.6, 0.5, 0, 2, 'свинина, говядина, молоко, соль, нитрит натрия', 'сосиска'],
+  ['Колбаса варёная', 'meat', 257, 12.8, 22.2, 8, 1.5, 0.5, 0, 2, 'свинина, говядина, яйцо, молоко, соль, нитрит натрия', 'докторская'],
+  ['Кола', 'drink', 42, 0, 0, 0, 10.6, 10.6, 0, 0, 'вода, сахар, ароматизатор, краситель', 'газировка'],
+  ['Сок апельсиновый 100%', 'drink', 45, 0.7, 0.2, 0, 10.4, 8.4, 0.2, 0, 'апельсиновый сок', 'сок'],
+  ['Латте без сахара', 'drink', 54, 3.4, 2.9, 1.8, 4.8, 4.8, 0, 0.1, 'молоко, кофе', 'кофе с молоком капучино'],
+  ['Квас', 'drink', 27, 0.2, 0, 0, 5.2, 4, 0, 0, 'вода, сахар, ржаной солод, мука ржаная, дрожжи', '']
+];
+const FOOD_SRC = 'Справочник NUTRIQ (средние значения)';
+function stem(w) { return w.toLowerCase().replace(/ё/g, 'е').slice(0, Math.max(3, Math.min(5, w.length - 1))); }
+function searchFoods(q, limit) {
+  const words = String(q).toLowerCase().replace(/ё/g, 'е').split(/[^а-яa-z0-9%]+/).filter(w => w.length >= 3 && !/^\d/.test(w));
+  if (!words.length) return [];
+  const out = [];
+  FOODS.forEach((f, i) => {
+    const hay = (f[0] + ' ' + f[11]).toLowerCase().replace(/ё/g, 'е').split(/[^а-яa-z0-9%]+/).filter(Boolean);
+    const nameW = f[0].toLowerCase().replace(/ё/g, 'е').split(/[^а-яa-z0-9%]+/).filter(Boolean);
+    const m = (w, arr) => arr.some(h => h.startsWith(stem(w)) || stem(h) === stem(w));
+    let hit = 0, inName = 0; for (const w of words) { if (m(w, hay)) hit++; if (m(w, nameW)) inName++; }
+    const first = m(words[0], nameW.slice(0, 1)) ? 3 : 0;
+    const exact = words.filter(w => hay.includes(w)).length * 6;
+    if (hit === words.length || (words.length > 2 && hit >= words.length - 1)) out.push({ i, score: hit * 10 + inName * 5 + first + exact - f[0].length / 100 });
+  });
+  if (!out.length && words.length > 1) {
+    // «гречка с курицей» — несколько продуктов: лучшие варианты по каждому слову
+    const seen = new Set(), res = [];
+    for (const w of words) for (const i of searchFoods(w, 2)) if (!seen.has(i)) { seen.add(i); res.push(i); }
+    return res.slice(0, limit || 8);
+  }
+  return out.sort((x, y) => y.score - x.score).slice(0, limit || 8).map(x => x.i);
+}
+function foodProduct(i) {
+  const f = FOODS[i]; const k = ['kcal', 'protein', 'fat', 'satfat', 'carbs', 'sugars', 'fiber', 'salt'], n = {};
+  k.forEach((key, j) => n[key] = f[2 + j]);
+  return { name: f[0], brand: '', category: f[1], ingredients: f[10], n, source: FOOD_SRC, foodKey: 'f' + i };
+}
+function parseQueryGrams(q) {
+  const m = /(\d+(?:[.,]\d+)?)\s*(г|гр|грамм[а-я]*|мл|g|ml)(?![а-я])/i.exec(q);
+  return { grams: m ? parseFloat(m[1].replace(',', '.')) : null, query: m ? (q.slice(0, m.index) + ' ' + q.slice(m.index + m[0].length)).replace(/\s+/g, ' ').trim() : q.trim() };
+}
+
 const SKIN_RANK = { low: 0, watch: 1, strong: 2, unknown: 9 };
 
-if (typeof module !== 'undefined') module.exports = { healthSummary, dayInsights, analyze, splitIngredients, normText, CATS, GOALS, NUTR, SKIN_RANK, ALLERGENS };
+if (typeof module !== 'undefined') module.exports = { FOODS, searchFoods, foodProduct, parseQueryGrams, calcTargets, eanValid, parseNum, validateBackup, healthSummary, dayInsights, analyze, splitIngredients, normText, CATS, GOALS, NUTR, SKIN_RANK, ALLERGENS };
 
 /* Разбор текста этикетки, распознанного с фото: состав и пищевая ценность на 100 г */
 function parseLabel(raw) {
@@ -698,6 +878,12 @@ function parseLabel(raw) {
     const end = s ? start + s.index : Math.min(low.length, start + 800);
     res.ingredients = t.slice(start, end).replace(/[\s.,;:]+$/, '').trim();
     nutStart = end;
+  }
+  if (!m) {
+    // слова «Состав» нет в кадре: берём текст до пищевой ценности, если он похож на список
+    const s = STOP.exec(low), end = s ? s.index : low.length;
+    const head = t.slice(0, end).trim();
+    if ((head.match(/,/g) || []).length >= 2 && /[а-я]{4,}/i.test(head)) { res.ingredients = head.replace(/[\s.,;:]+$/, ''); nutStart = end; }
   }
   const part = low.slice(nutStart) || low;
   const N = '(\\d{1,3}(?:[.,]\\d{1,2})?)';
@@ -742,7 +928,7 @@ function save() {
 /* ---------- утилиты ---------- */
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const num = v => { if (v == null || String(v).trim() === '') return null; const x = parseFloat(String(v).replace(',', '.')); return isFinite(x) ? x : null; };
+const num = v => parseNum(v);
 const fmt = (v, d = 1) => v == null ? '—' : Number(v).toLocaleString('ru-RU', { maximumFractionDigits: d });
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 const ymd = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -782,26 +968,7 @@ else matchMedia('(prefers-color-scheme: dark)').addEventListener('change', apply
 
 /* ---------- расчёты профиля ---------- */
 const ACT = { 1.2: 'Сидячий образ жизни, без тренировок', 1.375: '1–3 тренировки в неделю', 1.55: '3–5 тренировок в неделю', 1.725: '6–7 тренировок или физическая работа' };
-const GOAL_ADJ = { cut: -0.15, bulk: 0.10, recomp: -0.05, maintain: 0, perf: 0 };
-const PROT_PER_KG = { cut: 2.0, bulk: 1.8, recomp: 2.0, maintain: 1.6, perf: 1.8 };
-function targets() {
-  const p = S.profile; if (!p) return null;
-  const { age, height, weight } = p;
-  let t = null;
-  if (age && height && weight) {
-    const sexAdj = p.sex === 'm' ? 5 : p.sex === 'f' ? -161 : -78;
-    const bmr = 10 * weight + 6.25 * height - 5 * age + sexAdj;
-    const tdee = bmr * (p.activity || 1.375);
-    const kcal = Math.round(tdee * (1 + (GOAL_ADJ[p.goal] || 0)) / 50) * 50;
-    const protein = Math.round(weight * (PROT_PER_KG[p.goal] || 1.6));
-    const fat = Math.round(weight * 0.9);
-    const carbs = Math.max(0, Math.round((kcal - protein * 4 - fat * 9) / 4));
-    t = { bmr: Math.round(bmr), tdee: Math.round(tdee), kcal, protein, fat, carbs, fiber: Math.round(kcal / 1000 * 14), sexUnknown: !p.sex };
-  }
-  if (p.manualKcal) { t = t || { protein: null, fat: null, carbs: null }; t.kcal = p.manualKcal; t.fiber = Math.round(p.manualKcal / 1000 * 14); t.manual = true; }
-  if (p.manualProtein) { t = t || {}; t.protein = p.manualProtein; t.manual = true; }
-  return t;
-}
+function targets() { return calcTargets(S.profile); }
 
 /* ---------- дневник ---------- */
 function dayEntries(date) { return S.diary.filter(e => e.date === date); }
@@ -956,12 +1123,6 @@ function notFound() {
 }
 const OFF = 'https://world.openfoodfacts.org';
 const OFF_FIELDS = 'code,product_name,product_name_ru,brands,ingredients_text_ru,ingredients_text,nutriments,quantity,categories_tags';
-function eanValid(code) {
-  if (!/^\d{8}$|^\d{12,14}$/.test(code)) return false;
-  const d = code.split('').map(Number), check = d.pop();
-  const sum = d.reverse().reduce((s, x, i) => s + x * (i % 2 === 0 ? 3 : 1), 0);
-  return (10 - sum % 10) % 10 === check;
-}
 function barcodeVariants(code) {
   const v = [code];
   if (code.length === 12) v.push('0' + code);
@@ -1021,7 +1182,7 @@ async function lookupBarcode() {
     msg.textContent = err.name === 'AbortError' ? 'Open Food Facts не ответил за 12 секунд. Попробуйте ещё раз или найдите продукт по названию.' : 'Не удалось связаться с Open Food Facts. Проверьте интернет или найдите продукт по названию.';
   }
 }
-let offHits = [], searching = false, exactCount = 0;
+let offHits = [];
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const txt = v => typeof v === 'string' ? v : v && typeof v === 'object' ? (v.ru || v.main || Object.values(v)[0] || '') : '';
 function normHit(p) {
@@ -1042,51 +1203,75 @@ async function getJson(url, ms, tries) {
   }
   throw last || new Error('fail');
 }
-async function offSearch(q) {
+const offCache = new Map();
+let searchSeq = 0, searchTimer = null, pendingGrams = null;
+async function offSearch(q, signal) {
+  const key = q.toLowerCase();
+  if (offCache.has(key)) return offCache.get(key);
   const fields = OFF_FIELDS + ',countries_tags';
+  let res = null;
   try {
-    const j = await getJson(`https://search.openfoodfacts.org/search?q=${encodeURIComponent(q)}&page_size=30&langs=ru,en&fields=${fields}`, 10000, 2);
-    if (j && Array.isArray(j.hits)) return j.hits.map(normHit);
+    const j = await getJson(`https://search.openfoodfacts.org/search?q=${encodeURIComponent(q)}&page_size=30&langs=ru,en&fields=${fields}`, 8000, 2);
+    if (j && Array.isArray(j.hits)) res = j.hits.map(normHit);
   } catch (e) {}
-  const j = await getJson(`${OFF}/cgi/search.pl?search_terms=${encodeURIComponent(q)}&search_simple=1&action=process&json=1&page_size=30&fields=${fields}`, 20000, 2);
-  return (j.products || []).map(normHit);
+  if (!res) { const j = await getJson(`${OFF}/cgi/search.pl?search_terms=${encodeURIComponent(q)}&search_simple=1&action=process&json=1&page_size=30&fields=${fields}`, 15000, 1); res = (j.products || []).map(normHit); }
+  offCache.set(key, res);
+  return res;
 }
-async function searchByName() {
-  if (searching) return;
-  const q = $('#offQuery').value.trim(), msg = $('#lookupMsg'), box = $('#offResults'), btn = $('#offSearchBtn');
-  if (q.length < 3) { msg.textContent = 'Введите хотя бы бренд и вкус, например «Актибио вишня».'; return; }
-  searching = true; btn.disabled = true; btn.textContent = 'Ищем…';
-  box.innerHTML = ''; msg.textContent = 'Ищем по названию — обычно 2–5 секунд…';
-  const ql = q.toLowerCase().replace(/ё/g, 'е').split(/\s+/).filter(Boolean);
-  const mine = S.products.filter(p => ql.every(w => (p.name + ' ' + (p.brand || '')).toLowerCase().replace(/ё/g, 'е').includes(w)));
-  try {
-    const seen = new Map();
-    const add = list => list.filter(p => p.product_name_ru || p.product_name).forEach(p => { const k = p.code || (p.product_name_ru || p.product_name); if (!seen.has(k)) seen.set(k, p); });
-    add(await offSearch(q));
-    const words = q.split(/\s+/).filter(w => w.length > 1);
-    const matchCount = p => { const t = ((p.product_name_ru || '') + ' ' + (p.product_name || '') + ' ' + (p.brands || '')).toLowerCase().replace(/ё/g, 'е'); return ql.filter(w => t.includes(w)).length; };
-    // мало точных совпадений — ищем по частям запроса
-    if (words.length > 1 && [...seen.values()].filter(p => matchCount(p) === ql.length).length < 3) {
-      const subs = [words.slice(0, -1).join(' '), words.slice().sort((x, y) => y.length - x.length)[0]].filter((v, i, arr) => v && v !== q && arr.indexOf(v) === i).slice(0, 2);
-      for (const sq of subs) { try { add(await offSearch(sq)); } catch (e) {} }
-    }
-    const score = p => matchCount(p) * 10 + (p.ru ? 2 : 0) + (p.ingredients_text_ru || p.ingredients_text ? 1 : 0) + (p.nutriments.sugars_100g != null ? 1 : 0);
-    offHits = [...seen.values()].filter(p => matchCount(p) > 0).sort((x, y) => score(y) - score(x)).slice(0, 20);
-    exactCount = offHits.filter(p => matchCount(p) === ql.length).length;
-  } catch (err) {
-    offHits = [];
-    msg.textContent = (mine.length ? 'База Open Food Facts сейчас не отвечает — показываю только ваши продукты. ' : 'База Open Food Facts сейчас не отвечает. ') + 'Попробуйте через минуту или сфотографируйте состав.';
-  } finally { searching = false; btn.disabled = false; btn.textContent = 'Найти'; }
-  if (!offHits.length && !mine.length) { if (!/не отвечает/.test(msg.textContent)) msg.textContent = 'Этого товара нет в открытой базе. Сфотографируйте состав — продукт сохранится у вас и в следующий раз найдётся сразу.'; return; }
-  if (offHits.length) msg.textContent = exactCount ? 'Выберите свой продукт. Отметки показывают, каких данных в базе нет.' : 'Точно такого в базе нет. Вот похожие — или сфотографируйте состав своего, он сохранится у вас.';
-  box.innerHTML = mine.map(p => `<button type="button" class="hit" data-mine="${p.id}"><b>${esc(p.name)}</b><small>${esc(p.brand || '')} <span class="chip sage">мой продукт</span></small></button>`).join('')
-    + offHits.map((p, i) => { const c = offCompleteness(p); return `<button type="button" class="hit" data-hit="${i}"><b>${esc(p.product_name_ru || p.product_name)}</b><small>${esc([p.brands && p.brands.split(',')[0], p.quantity].filter(Boolean).join(', '))}</small>
+function renderHits(foods, mine, hits, state) {
+  const box = $('#offResults');
+  const g = pendingGrams ? ` · ${fmt(pendingGrams, 0)} г` : '';
+  box.innerHTML =
+    foods.map(i => { const f = FOODS[i]; return `<button type="button" class="hit" data-food="${i}"><b>${esc(f[0])}</b><small>${f[2]} ккал, Б ${f[3]} Ж ${f[4]} У ${f[6]} на 100 г${g} <span class="chip good">справочник</span></small></button>`; }).join('')
+    + mine.map(p => `<button type="button" class="hit" data-mine="${p.id}"><b>${esc(p.name)}</b><small>${esc(p.brand || '')} <span class="chip sage">мой продукт</span></small></button>`).join('')
+    + (state === 'loading' ? '<p class="muted hint">Ищем товары в магазинной базе…</p>' : '')
+    + hits.map((p, i) => { const c = offCompleteness(p); return `<button type="button" class="hit" data-hit="${i}"><b>${esc(p.product_name_ru || p.product_name)}</b><small>${esc([p.brands && p.brands.split(',')[0], p.quantity].filter(Boolean).join(', '))}</small>
       <span class="chips">${c.ing ? '' : '<span class="chip amber">нет состава</span>'}${c.sug ? '' : '<span class="chip unk">нет сахаров</span>'}${c.prot ? '' : '<span class="chip unk">нет КБЖУ</span>'}</span></button>`; }).join('');
 }
-$('#offSearchBtn').addEventListener('click', searchByName);
-$('#offQuery').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); searchByName(); } });
+async function searchByName(live) {
+  const raw = $('#offQuery').value, msg = $('#lookupMsg'), btn = $('#offSearchBtn');
+  const { grams, query: q } = parseQueryGrams(raw);
+  pendingGrams = grams;
+  if (q.length < 3) { if (!live) msg.textContent = 'Введите название, например «гречка», «курица 150 г» или «Актибио вишня».'; $('#offResults').innerHTML = ''; return; }
+  const seq = ++searchSeq;
+  const ql = q.toLowerCase().replace(/ё/g, 'е').split(/\s+/).filter(w => w.length > 1);
+  const foods = searchFoods(q, 6);
+  const mine = S.products.filter(p => ql.every(w => (p.name + ' ' + (p.brand || '')).toLowerCase().replace(/ё/g, 'е').includes(w))).slice(0, 5);
+  offHits = [];
+  renderHits(foods, mine, [], 'loading');
+  msg.textContent = foods.length || mine.length ? 'Выберите продукт. Магазинные товары подгружаются ниже.' : 'Ищем…';
+  btn.disabled = true;
+  try {
+    const words = q.split(/\s+/).filter(w => w.length > 1);
+    const queries = [q];
+    if (words.length > 1) { queries.push(words.slice(0, -1).join(' ')); queries.push(words.slice().sort((x, y) => y.length - x.length)[0]); }
+    const uniq = [...new Set(queries)].slice(0, 3);
+    const results = await Promise.allSettled(uniq.map(x => offSearch(x)));
+    if (seq !== searchSeq) return; // пользователь уже ввёл другое
+    const seen = new Map();
+    results.forEach(r => { if (r.status === 'fulfilled') r.value.filter(p => p.product_name_ru || p.product_name).forEach(p => { const k = p.code || (p.product_name_ru || p.product_name); if (!seen.has(k)) seen.set(k, p); }); });
+    const matchCount = p => { const t = ((p.product_name_ru || '') + ' ' + (p.product_name || '') + ' ' + (p.brands || '')).toLowerCase().replace(/ё/g, 'е'); return ql.filter(w => t.includes(w.slice(0, Math.max(3, w.length - 2)))).length; };
+    const score = p => matchCount(p) * 10 + (p.ru ? 2 : 0) + (p.ingredients_text_ru || p.ingredients_text ? 1 : 0) + (p.nutriments.sugars_100g != null ? 1 : 0);
+    offHits = [...seen.values()].filter(p => matchCount(p) > 0).sort((x, y) => score(y) - score(x)).slice(0, 20);
+    const allFailed = results.every(r => r.status === 'rejected');
+    renderHits(foods, mine, offHits, 'done');
+    if (allFailed) msg.textContent = (foods.length || mine.length ? 'Магазинная база сейчас не отвечает — показываю справочник и ваши продукты.' : 'Магазинная база сейчас не отвечает. Попробуйте через минуту или сфотографируйте состав.');
+    else if (!offHits.length && !foods.length && !mine.length) msg.textContent = 'Ничего не нашли. Попробуйте одно слово («квас») или сфотографируйте состав — продукт сохранится у вас.';
+    else msg.textContent = pendingGrams ? `Выберите продукт — ${fmt(pendingGrams, 0)} г подставятся сами.` : 'Выберите продукт.';
+  } finally { if (seq === searchSeq) btn.disabled = false; }
+}
+$('#offSearchBtn').addEventListener('click', () => { clearTimeout(searchTimer); searchByName(false); });
+$('#offQuery').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); clearTimeout(searchTimer); searchByName(false); } });
+$('#offQuery').addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(() => searchByName(true), 450); });
 $('#offResults').addEventListener('click', e => {
-  const m = e.target.closest('[data-mine]'); if (m) { openProduct(m.dataset.mine); return; }
+  const fd = e.target.closest('[data-food]');
+  if (fd) {
+    const fp = foodProduct(+fd.dataset.food);
+    let p = S.products.find(x => x.foodKey === fp.foodKey);
+    if (!p) { p = Object.assign({ id: uid(), barcode: '', price: null, packG: null, priceDate: null, savedAt: new Date().toISOString() }, fp); S.products.unshift(p); save(); }
+    openProduct(p.id, pendingGrams); renderLibrary(); return;
+  }
+  const m = e.target.closest('[data-mine]'); if (m) { openProduct(m.dataset.mine, pendingGrams); return; }
   const h = e.target.closest('[data-hit]'); if (!h) return;
   const p = offHits[+h.dataset.hit]; $('#offResults').innerHTML = '';
   if (p) fillFromOff(p, (p.code || '').replace(/\D/g, ''));
@@ -1175,44 +1360,39 @@ let ocrWorker = null;
 function loadImg(file) {
   return new Promise((res, rej) => { const url = URL.createObjectURL(file), img = new Image(); img.onload = () => { URL.revokeObjectURL(url); res(img); }; img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('image')); }; img.src = url; });
 }
-/* Подготовка выделенного фрагмента: увеличение, затем локальная бинаризация (сравнение с соседями, а не с общим порогом).
-   Даёт два варианта — для тёмного текста на светлом и для светлого на тёмном/цветном. */
+/* Подготовка выделенного фрагмента: увеличение до ~1400 px по ширине и локальная бинаризация.
+   Полярность (тёмный текст на светлом или наоборот) угадывается заранее по асимметрии яркости: текст — меньшинство пикселей. */
 function prepVariants(img, rect) {
   const r = rect || { x: 0, y: 0, w: 1, h: 1 };
   const sx = Math.round(r.x * img.width), sy = Math.round(r.y * img.height);
   const sw = Math.max(20, Math.round(r.w * img.width)), sh = Math.max(20, Math.round(r.h * img.height));
-  let s = Math.min(3, Math.max(1, 1800 / sw));
-  if (sw * s * sh * s > 5e6) s = Math.sqrt(5e6 / (sw * sh));
+  let s = Math.min(3, Math.max(0.5, 1400 / sw));
+  if (sw * s * sh * s > 2.6e6) s = Math.sqrt(2.6e6 / (sw * sh));
   const W = Math.max(1, Math.round(sw * s)), H = Math.max(1, Math.round(sh * s));
   const c = document.createElement('canvas'); c.width = W; c.height = H;
   const x = c.getContext('2d'); x.imageSmoothingQuality = 'high'; x.drawImage(img, sx, sy, sw, sh, 0, 0, W, H);
-  const px = x.getImageData(0, 0, W, H).data, N = W * H;
+  const px = x.getImageData(0, 0, W, H).data, N = W * H, W1 = W + 1;
   const g = new Float32Array(N);
   for (let i = 0, j = 0; i < N; i++, j += 4) g[i] = 0.299 * px[j] + 0.587 * px[j + 1] + 0.114 * px[j + 2];
-  // интегральное изображение для быстрых средних по окну
-  const integ = (src) => { const I = new Float64Array((W + 1) * (H + 1)); for (let yy = 1; yy <= H; yy++) { let row = 0; for (let xx = 1; xx <= W; xx++) { row += src[(yy - 1) * W + xx - 1]; I[yy * (W + 1) + xx] = I[(yy - 1) * (W + 1) + xx] + row; } } return I; };
-  const boxMean = (I, xx, yy, rad) => { const x0 = Math.max(0, xx - rad), y0 = Math.max(0, yy - rad), x1 = Math.min(W, xx + rad + 1), y1 = Math.min(H, yy + rad + 1);
-    return (I[y1 * (W + 1) + x1] - I[y0 * (W + 1) + x1] - I[y1 * (W + 1) + x0] + I[y0 * (W + 1) + x0]) / ((x1 - x0) * (y1 - y0)); };
-  const Ig = integ(g);
-  const sm = new Float32Array(N); // лёгкое сглаживание 3×3 против текстуры этикетки
-  for (let yy = 0; yy < H; yy++) for (let xx = 0; xx < W; xx++) sm[yy * W + xx] = boxMean(Ig, xx, yy, 1);
-  const Is = integ(sm), rad = Math.max(15, Math.round(Math.max(W, H) / 50));
-  const d = new Float32Array(N);
-  for (let yy = 0; yy < H; yy++) for (let xx = 0; xx < W; xx++) { const i = yy * W + xx; d[i] = sm[i] - boxMean(Is, xx, yy, rad); }
-  const make = (light) => {
+  const integ = src => { const I = new Float64Array(W1 * (H + 1)); for (let yy = 1; yy <= H; yy++) { let row = 0; const o = yy * W1, po = o - W1, so = (yy - 1) * W; for (let xx = 1; xx <= W; xx++) { row += src[so + xx - 1]; I[o + xx] = I[po + xx] + row; } } return I; };
+  const boxFilter = (src, rad) => { const I = integ(src), out = new Float32Array(N);
+    for (let yy = 0; yy < H; yy++) { const y0 = Math.max(0, yy - rad), y1 = Math.min(H, yy + rad + 1);
+      for (let xx = 0; xx < W; xx++) { const x0 = Math.max(0, xx - rad), x1 = Math.min(W, xx + rad + 1);
+        out[yy * W + xx] = (I[y1 * W1 + x1] - I[y0 * W1 + x1] - I[y1 * W1 + x0] + I[y0 * W1 + x0]) / ((x1 - x0) * (y1 - y0)); } }
+    return out; };
+  const sm = boxFilter(g, 1), mean = boxFilter(sm, Math.max(15, Math.round(Math.max(W, H) / 50)));
+  const d = new Float32Array(N); let m3 = 0;
+  for (let i = 0; i < N; i++) { const v = sm[i] - mean[i]; d[i] = v; if (v > 8 || v < -8) m3 += v * v * v; }
+  const lightFirst = m3 > 0;
+  const make = light => {
     const ink = new Float32Array(N);
     for (let i = 0; i < N; i++) ink[i] = (light ? d[i] > 14 : d[i] < -14) ? 1 : 0;
-    const Ii = integ(ink), out = document.createElement('canvas'); out.width = W; out.height = H;
+    const maj = boxFilter(ink, 1), out = document.createElement('canvas'); out.width = W; out.height = H;
     const o = out.getContext('2d'), im = o.createImageData(W, H), q = im.data;
-    for (let yy = 0; yy < H; yy++) for (let xx = 0; xx < W; xx++) { const i = yy * W + xx, v = boxMean(Ii, xx, yy, 1) > 0.5 ? 0 : 255, j = i * 4; q[j] = q[j + 1] = q[j + 2] = v; q[j + 3] = 255; }
+    for (let i = 0, j = 0; i < N; i++, j += 4) { const val = maj[i] > 0.5 ? 0 : 255; q[j] = q[j + 1] = q[j + 2] = val; q[j + 3] = 255; }
     o.putImageData(im, 0, 0); return out;
   };
-  // запасной вариант: серый с растянутым контрастом
-  let mn = 255, mx = 0; for (let i = 0; i < N; i++) { if (sm[i] < mn) mn = sm[i]; if (sm[i] > mx) mx = sm[i]; }
-  const gc = document.createElement('canvas'); gc.width = W; gc.height = H; const go = gc.getContext('2d'), gi = go.createImageData(W, H), gq = gi.data, span = Math.max(1, mx - mn);
-  for (let i = 0, j = 0; i < N; i++, j += 4) { const v = (sm[i] - mn) / span * 255; gq[j] = gq[j + 1] = gq[j + 2] = v; gq[j + 3] = 255; }
-  go.putImageData(gi, 0, 0);
-  return { dark: make(false), light: make(true), gray: gc };
+  return { order: lightFirst ? [true, false] : [false, true], make };
 }
 /* Насколько текст похож на русский: уверенность распознавания × доля кириллицы × доля нормальных слов */
 function ocrScore(data) {
@@ -1226,59 +1406,68 @@ function ocrScore(data) {
 async function barcodeFromPhoto(file) {
   try { const t = await decodeBarcodeImage(file); const d = String(t || '').replace(/\D/g, ''); return d.length >= 8 ? d : null; } catch (e) { return null; }
 }
+let ocrWorkerPromise = null;
+function ensureOcrWorker(msg) {
+  if (!ocrWorkerPromise) {
+    ocrWorkerPromise = (async () => {
+      if (!window.Tesseract) await loadScript(OCR_LIB);
+      const w = await Tesseract.createWorker('rus', 1, { logger: m => {
+        const el = $('#lookupMsg');
+        if (m.status === 'recognizing text' && /Чита|Пробу/.test(el.textContent)) el.textContent = el.textContent.replace(/\s\d+%$/, '') + ` ${Math.round((m.progress || 0) * 100)}%`;
+      } });
+      try { await w.setParameters({ tessedit_pageseg_mode: '6', preserve_interword_spaces: '1' }); } catch (e) {}
+      return w;
+    })();
+    ocrWorkerPromise.catch(() => { ocrWorkerPromise = null; });
+  }
+  return ocrWorkerPromise;
+}
 async function runOcr(file, rect) {
   const msg = $('#lookupMsg'), btn = $('#photoBtn');
   btn.disabled = true; btn.textContent = 'Распознаём…';
+  const t0 = Date.now();
   try {
-    msg.textContent = 'Ищем штрихкод на фото…';
-    const code = await barcodeFromPhoto(file);
-    msg.textContent = 'Загружаем распознавание текста. В первый раз это 10–20 МБ, потом быстрее.';
-    if (!window.Tesseract) await loadScript(OCR_LIB);
-    if (!ocrWorker) {
-      ocrWorker = await Tesseract.createWorker('rus', 1, { logger: m => {
-        if (m.status === 'recognizing text' && /Чита|Пробу/.test(msg.textContent)) msg.textContent = msg.textContent.replace(/\s\d+%$/, '') + ` ${Math.round((m.progress || 0) * 100)}%`;
-        else if (/load|init/i.test(m.status || '')) msg.textContent = 'Загружаем словарь русского языка…';
-      } });
-    }
-    const img = await loadImg(file), v = prepVariants(img, rect);
-    try { await ocrWorker.setParameters({ tessedit_pageseg_mode: '6', preserve_interword_spaces: '1' }); } catch (e) {}
+    const firstRun = !ocrWorker;
+    msg.textContent = firstRun ? 'Готовим распознавание — в первый раз до минуты, дальше за секунды…' : 'Готовим фото…';
+    const [worker, img] = await Promise.all([ensureOcrWorker(), loadImg(file)]);
+    ocrWorker = worker;
+    const v = prepVariants(img, rect);
     let best = null;
-    const passes = [['dark', 'Читаем этикетку…'], ['light', 'Пробуем как светлый текст…'], ['gray', 'Пробуем последний вариант…']];
-    for (const [key, label] of passes) {
-      msg.textContent = label;
-      const { data } = await ocrWorker.recognize(v[key]);
-      const sc = ocrScore(data);
-      if (!best || sc > best.sc) best = { sc, text: (data.text || '').trim() };
-      if (sc >= 0.6) break;
+    for (let k = 0; k < v.order.length; k++) {
+      msg.textContent = k === 0 ? 'Читаем этикетку…' : 'Пробуем ещё раз с другой обработкой…';
+      const { data } = await worker.recognize(v.make(v.order[k]));
+      const text = (data.text || '').trim(), parsed = parseLabel(text), sc = ocrScore(data);
+      const useful = (parsed.ingredients ? 2 : 0) + Object.keys(parsed.n).length;
+      const cand = { sc, text, parsed, useful };
+      if (!best || cand.useful > best.useful || (cand.useful === best.useful && cand.sc > best.sc)) best = cand;
+      if (useful >= 3 || sc >= 0.55) break;
     }
-    const text = best ? best.text : '';
-    $('#ocrRaw').value = text; $('#ocrRawBox').hidden = !text;
-    if (!best || best.sc < 0.3) {
-      msg.textContent = 'Текст не читается: на фото слишком мелко, бликует или этикетка изогнута. Как снять: поверните бутылку составом к себе, подойдите на 10–15 см, чтобы состав занял весь кадр, без вспышки и бликов. Если не выйдет — перепишите состав вручную.';
+    $('#ocrRaw').value = best ? best.text : ''; $('#ocrRawBox').hidden = !(best && best.text);
+    if (!best || (!best.useful && best.sc < 0.2)) {
+      msg.textContent = 'Текст не читается. Подойдите ближе, чтобы состав занял весь кадр, уберите блики и выделите рамкой только текст.';
       return;
     }
-    const r = parseLabel(text);
-    const filled = [];
-    if (code && F('barcode').value.replace(/\D/g, '') !== code) { F('barcode').value = code; filled.push('штрихкод'); }
+    const r = best.parsed, filled = [];
     if (r.ingredients) { F('ing').value = r.ingredients; filled.push('состав'); }
     for (const k of NUT_FIELDS) if (r.n[k] != null) { F(k).value = String(r.n[k]).replace('.', ','); filled.push(NUTR[k].toLowerCase()); }
-    if (r.ingredients || Object.keys(r.n).length) {
+    const sec = Math.round((Date.now() - t0) / 1000);
+    if (filled.length) {
       setFormSource('Распознано с фото');
-      msg.textContent = `Заполнили: ${filled.join(', ')}. Распознавание иногда путает цифры и редкие слова — сверьте с упаковкой и впишите название.`;
+      msg.textContent = `Готово за ${sec} с. Заполнили: ${filled.join(', ')}. Сверьте с упаковкой и впишите название.`;
       haptic(); setTimeout(() => F('name').scrollIntoView({ block: 'center', behavior: 'smooth' }), 100);
-    } else if (code) {
-      F('barcode').value = code; msg.textContent = 'Текст прочитать не удалось, но на фото есть штрихкод. Ищем по нему…';
-      await lookupBarcode();
     } else {
-      msg.textContent = 'Не получилось прочитать состав. Снимите ближе и ровнее, при хорошем свете, чтобы текст занимал почти весь кадр. Бутылку лучше поворачивать и снимать частями.' + (text ? ' Что удалось разобрать — в блоке «Распознанный текст целиком».' : '');
+      msg.textContent = 'Текст прочитан, но состав в нём не найден. Откройте «Распознанный текст целиком» и нажмите «Вставить в состав», если там то, что нужно.';
+      $('#ocrRawBox').open = true;
     }
   } catch (e) {
-    msg.textContent = 'Не удалось запустить распознавание. Проверьте интернет: в первый раз нужно скачать языковые данные.';
+    msg.textContent = 'Не удалось запустить распознавание. Проверьте интернет: в первый раз нужно скачать языковые данные (~15 МБ).';
   } finally {
     btn.disabled = false; btn.textContent = 'Сфотографировать состав'; $('#photoInput').value = '';
   }
 }
-$('#photoBtn').addEventListener('click', () => $('#photoInput').click());
+$('#photoBtn').addEventListener('click', () => { ensureOcrWorker().catch(() => {}); $('#photoInput').click(); });
+$('#ocrPaste').addEventListener('click', () => { const t = $('#ocrRaw').value.trim(); if (!t) return; F('ing').value = t.replace(/\s*\n\s*/g, ' '); setFormSource('Распознано с фото'); toast('Текст вставлен в состав — поправьте ошибки'); F('ing').scrollIntoView({ block: 'center' }); });
+
 function openCrop(file) {
   const url = URL.createObjectURL(file);
   let box = { x: 0.08, y: 0.25, w: 0.84, h: 0.5 };
@@ -1336,7 +1525,7 @@ const TONE_ICON = { strong: '●', watch: '●', good: '●', info: '○', amber
 function factorList(list) {
   return list.map(f => `<li class="f ${f.tone}"><span class="dot" aria-hidden="true">${TONE_ICON[f.tone] || '○'}</span><div>${f.title ? `<b>${esc(f.title)}</b>` : ''}<p>${esc(f.text)}</p></div></li>`).join('');
 }
-function openProduct(id) {
+function openProduct(id, grams) {
   const p = S.products.find(x => x.id === id); if (!p) return;
   const a = analyze(p, S.profile), h = healthSummary(p, a, targets());
   const priceTxt = a.value ? `<div class="kv"><span>Цена за 100 ${p.category === 'drink' ? 'мл' : 'г'}</span><b>${fmt(a.value.per100, 1)} ₽</b></div>`
@@ -1381,7 +1570,7 @@ function openProduct(id) {
       ${a.missing.length ? `<section><h3>Чего не хватает</h3><p>${esc(a.missing.join(', '))}. Добавьте с упаковки, чтобы оценка стала точнее.</p></section>` : ''}
       ${alts}
     </article>
-    <div class="addrow"><label>Граммы<input id="addGrams" inputmode="decimal" value="100"></label><button class="btn" id="addToDiary">Добавить в дневник</button></div>
+    <div class="addrow"><label>Граммы<input id="addGrams" inputmode="decimal" value="${grams ? fmt(grams, 0).replace(/\s/g, '') : 100}"></label><button class="btn" id="addToDiary">Добавить в дневник</button></div>
     <div class="actions"><button class="btn ghost" id="editProd">Изменить данные</button><button class="btn ghost danger" id="delProd">Удалить</button></div>`);
   $('#addToDiary').onclick = () => {
     const g = num($('#addGrams').value);
@@ -1587,7 +1776,9 @@ function renderProfile() {
     h += `<section class="panel"><h2>Ориентиры на день</h2>
       <div class="macros four"><div><span>Ккал</span><b>${fmt(t.kcal, 0)}</b></div><div><span>Белки</span><b>${t.protein != null ? t.protein + ' г' : '—'}</b></div><div><span>Жиры</span><b>${t.fat != null ? t.fat + ' г' : '—'}</b></div><div><span>Углеводы</span><b>${t.carbs != null ? t.carbs + ' г' : '—'}</b></div></div>
       ${t.bmr ? `<p class="note">Основной обмен по формуле Миффлина — Сан Жеора: ${fmt(t.bmr, 0)} ккал, с учётом активности: ${fmt(t.tdee, 0)} ккал.${t.sexUnknown ? ' Пол не указан — взято среднее между формулами, точность ниже.' : ''} Это оценка, а не измерение: сверяйтесь с динамикой веса за 2–3 недели и корректируйте.</p>` : ''}
-      ${t.manual ? '<p class="note">Учтены ваши собственные ориентиры.</p>' : ''}</section>`;
+      ${t.manual ? '<p class="note">Учтены ваши собственные ориентиры.</p>' : ''}
+      ${t.teen ? '<p class="note warn">До 18 лет худеть на дефиците калорий без врача не стоит — норма рассчитана без дефицита.</p>' : ''}
+      ${t.floored ? '<p class="note warn">Расчётный дефицит получился слишком большим. Норма поднята до безопасного минимума — ниже есть не стоит.</p>' : ''}</section>`;
   }
   h += `<section class="panel"><h2>Источники данных</h2>
     <ul class="conn"><li><span class="chip good">подключено</span> Open Food Facts — поиск по штрихкоду. База сообщества: российских товаров в ней много, но не все, данные стоит сверять с упаковкой.</li>
@@ -1595,7 +1786,7 @@ function renderProfile() {
     <li><span class="chip good">подключено</span> Распознавание состава по фото — работает прямо на телефоне, фото никуда не отправляются. В первый раз скачивает языковые данные (10–20 МБ). Узнать товар по фото лицевой стороны пока нельзя — для этого нужен сервер с AI.</li></ul>
     <p class="note">Все данные хранятся только на этом устройстве, внутри Telegram. Они не отправляются на сервер.</p></section>
   <section class="panel"><h2>Тема</h2><div class="seg" role="radiogroup" aria-label="Тема">${[['auto', inTelegram ? 'Как в Telegram' : 'Как в системе'], ['light', 'Светлая'], ['dark', 'Тёмная']].map(([v, l]) => `<label><input type="radio" name="theme" value="${v}" ${themePref() === v ? 'checked' : ''}><span>${l}</span></label>`).join('')}</div></section>
-  <section class="panel"><h2>Данные</h2><button class="btn ghost" id="exportBtn">Скопировать данные (JSON)</button><button class="btn ghost danger" id="wipeBtn">Удалить все мои данные</button></section>`;
+  <section class="panel"><h2>Данные</h2><button class="btn ghost" id="exportBtn">Скопировать данные (JSON)</button><button class="btn ghost" id="importBtn">Восстановить из копии</button><button class="btn ghost danger" id="wipeBtn">Удалить все мои данные</button></section>`;
   $('#profileBody').innerHTML = h;
   $('#profForm').onsubmit = e => {
     e.preventDefault();
@@ -1618,6 +1809,17 @@ function renderProfile() {
     const data = JSON.stringify(S, null, 1);
     try { await navigator.clipboard.writeText(data); toast('Данные скопированы — вставьте их в заметки или файл'); }
     catch (e) { openSheet(`<h2>Ваши данные</h2><p class="muted">Скопируйте текст вручную.</p><textarea class="dump" readonly>${esc(data)}</textarea>`); }
+  };
+  $('#importBtn').onclick = () => {
+    openSheet(`<h2>Восстановить данные</h2><p class="muted">Вставьте текст, который вы раньше скопировали кнопкой «Скопировать данные». Текущие данные заменятся.</p>
+      <textarea id="importText" rows="8" placeholder='{"profile": …}'></textarea><button class="btn" id="importGo">Восстановить</button>`);
+    $('#importGo').onclick = async () => {
+      let obj; try { obj = JSON.parse($('#importText').value); } catch (e) { toast('Это не похоже на копию данных — проверьте, что вставили текст целиком'); return; }
+      const v = validateBackup(obj);
+      if (!v.ok) { toast('Не получилось: ' + v.errs.join(', ')); return; }
+      if (!(await confirmAsk(`Восстановить: продуктов ${v.data.products.length}, записей ${v.data.diary.length}, дней кожи ${v.data.skin.length}? Текущие данные заменятся.`, 'Восстановить'))) return;
+      S = Object.assign(blank(), v.data); if (save()) { haptic(); toast('Данные восстановлены'); closeSheet(); go('home'); }
+    };
   };
   $('#wipeBtn').onclick = async () => {
     if (!(await confirmAsk('Удалить профиль, продукты, дневник питания и дневник кожи? Это нельзя отменить.'))) return;
